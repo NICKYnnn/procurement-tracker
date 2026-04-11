@@ -344,6 +344,46 @@ input,select,textarea{font-family:var(--font);color:var(--ink)}
     </div>
     <div class="content"><div class="section"><div style="overflow-x:auto"><table class="tbl"><thead><tr><th>廠商名稱</th><th>聯絡人</th><th>電話</th><th>付款條件</th><th id="th-vamt">本月帳款</th><th>狀態</th></tr></thead><tbody id="vendor-tbody"></tbody></table></div></div></div>
   </div>
+  <div id="page-settings" class="page">
+    <div class="topbar">
+      <button class="mob-menu" onclick="openMob()"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 4h12M2 8h12M2 12h12"/></svg></button>
+      <h1>系統設定</h1>
+    </div>
+    <div class="content">
+      <div class="section">
+        <div class="sec-hd"><h2>AI 辨識設定</h2></div>
+        <div style="padding:20px">
+          <div style="background:var(--info-lt);border:1px solid #a0c8f0;border-radius:9px;padding:14px 16px;margin-bottom:18px;font-size:12.5px;color:var(--info);line-height:1.65">
+            <strong style="color:var(--info)">Gemini API Key 儲存在你的瀏覽器本機，不會上傳到任何伺服器。</strong><br>
+            每台裝置需要各自設定一次。申請免費 Key：<a href="https://aistudio.google.com/apikey" target="_blank" style="color:var(--info)">aistudio.google.com/apikey</a>
+          </div>
+          <div class="form-row" style="margin-bottom:14px">
+            <label style="display:block;font-size:11.5px;font-weight:500;color:var(--ink2);margin-bottom:6px">Gemini API Key</label>
+            <div style="display:flex;gap:8px">
+              <input type="password" id="gemini-key-input" placeholder="AIzaSy..." style="flex:1;padding:9px 12px;border:1.5px solid var(--border);border-radius:8px;font-family:var(--mono);font-size:12.5px;outline:none;background:var(--surface);color:var(--ink)">
+              <button class="btn btn-primary" onclick="saveGeminiKey()">儲存</button>
+              <button class="btn btn-ghost" onclick="clearGeminiKey()">清除</button>
+            </div>
+            <div id="key-status" style="font-size:12px;margin-top:6px;color:var(--ink3)"></div>
+          </div>
+          <div style="font-size:12.5px;color:var(--ink2);line-height:1.7">
+            <strong>如何申請：</strong><br>
+            1. 打開 <a href="https://aistudio.google.com/apikey" target="_blank" style="color:var(--info)">aistudio.google.com/apikey</a><br>
+            2. 登入 Google 帳號<br>
+            3. 按「Create API key」<br>
+            4. 複製 Key 貼到上方欄位，按儲存
+          </div>
+        </div>
+      </div>
+      <div class="section">
+        <div class="sec-hd"><h2>測試 AI 辨識</h2></div>
+        <div style="padding:20px">
+          <div id="test-status" style="font-size:13px;color:var(--ink3);margin-bottom:12px">設定 API Key 後可在此測試連線</div>
+          <button class="btn btn-ghost" onclick="testGemini()">測試連線</button>
+        </div>
+      </div>
+    </div>
+  </div>
 </div>
 </div>
 
@@ -410,8 +450,8 @@ const CMAP={'紅色':'#e05555','藍色':'#5577e0','黑色':'#333','白色':'#ccc
 let currentUser=null;
 let DB={pos:[],shipments:[],vendors:[],inventory:[]};
 const ROLE_CFG={
-  admin:{pages:['dashboard','po','upload','shipments','compare','inventory','billing','vendors'],showPrice:true,showBilling:true},
-  helper:{pages:['dashboard','po','inventory','compare'],showPrice:false,showBilling:false}
+  admin:{pages:['dashboard','po','upload','shipments','compare','inventory','billing','vendors','settings'],showPrice:true,showBilling:true},
+  helper:{pages:['dashboard','po','inventory','compare','settings'],showPrice:false,showBilling:false}
 };
 
 async function api(action,body={}){
@@ -485,6 +525,7 @@ function renderCurrentPage(){
   else if(id==='inventory')renderInventory();
   else if(id==='billing')renderBilling();
   else if(id==='vendors')renderVendors();
+  else if(id==='settings')renderSettings();
 }
 
 const ALL_NAV=[
@@ -496,6 +537,7 @@ const ALL_NAV=[
   {id:'inventory',label:'庫存管理',icon:'<rect x="2" y="5" width="4" height="7"/><rect x="6.5" y="3" width="4" height="9"/><rect x="11" y="1" width="1" height="11"/>',sec:null},
   {id:'billing',label:'月結帳款',icon:'<rect x="1" y="2" width="12" height="10" rx="1.5"/><path d="M4 6h6M4 8.5h3.5"/>',sec:'帳務'},
   {id:'vendors',label:'廠商管理',icon:'<circle cx="7" cy="4.5" r="2.5"/><path d="M1.5 12c0-2.485 2.462-4.5 5.5-4.5s5.5 2.015 5.5 4.5"/>',sec:null},
+  {id:'settings',label:'系統設定',icon:'<circle cx="7" cy="7" r="2"/><path d="M7 1v1.5M7 11.5V13M1 7h1.5M11.5 7H13M2.5 2.5l1 1M9.5 9.5l1 1M2.5 11.5l1-1M9.5 4.5l1-1"/>',sec:'設定'},
 ];
 
 function buildNav(cfg){
@@ -518,7 +560,7 @@ function applyPermissions(cfg){
   const thva=document.getElementById('th-vamt');if(thva)thva.style.display=cfg.showPrice?'':'none';
 }
 
-const PAGES=['dashboard','po','upload','shipments','compare','inventory','billing','vendors'];
+const PAGES=['dashboard','po','upload','shipments','compare','inventory','billing','vendors','settings'];
 function go(p){
   const cfg=ROLE_CFG[currentUser.role];
   if(!cfg.pages.includes(p)){showLocked();return;}
@@ -684,19 +726,71 @@ async function saveVendor(){
   try{await api('addVendor',{row});toast('廠商已新增 ✓');closeOv('vendor-modal');await loadAll();}catch(e){}
 }
 
+// ── Gemini Key management ────────────────────────────────────────────────────
+function getGeminiKey(){return localStorage.getItem('gemini_api_key')||'';}
+function saveGeminiKey(){
+  const key=document.getElementById('gemini-key-input').value.trim();
+  if(!key){toast('請輸入 API Key',true);return;}
+  localStorage.setItem('gemini_api_key',key);
+  document.getElementById('key-status').innerHTML='<span style="color:var(--success)">✓ 已儲存到本機瀏覽器</span>';
+  toast('API Key 已儲存 ✓');
+}
+function clearGeminiKey(){
+  localStorage.removeItem('gemini_api_key');
+  document.getElementById('gemini-key-input').value='';
+  document.getElementById('key-status').textContent='已清除';
+  toast('API Key 已清除');
+}
+function renderSettings(){
+  const key=getGeminiKey();
+  const input=document.getElementById('gemini-key-input');
+  const status=document.getElementById('key-status');
+  if(input){input.value=key?'●'.repeat(20):'';}
+  if(status){status.innerHTML=key?'<span style="color:var(--success)">✓ 已設定 API Key</span>':'<span style="color:var(--ink3)">尚未設定</span>';}
+}
+async function testGemini(){
+  const key=getGeminiKey();
+  const statusEl=document.getElementById('test-status');
+  if(!key){statusEl.innerHTML='<span style="color:var(--accent)">請先設定 API Key</span>';return;}
+  statusEl.innerHTML='<span style="color:var(--warn)">測試中...</span>';
+  try{
+    const res=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${key}`,{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({contents:[{parts:[{text:'回覆OK'}]}]})
+    });
+    const data=await res.json();
+    if(data.candidates){statusEl.innerHTML='<span style="color:var(--success)">✓ 連線成功！AI 辨識功能可以使用</span>';}
+    else{statusEl.innerHTML=`<span style="color:var(--accent)">連線失敗：${JSON.stringify(data.error||data)}</span>`;}
+  }catch(e){statusEl.innerHTML=`<span style="color:var(--accent)">錯誤：${e.message}</span>`;}
+}
+
+// ── Upload with Gemini ────────────────────────────────────────────────────────
 async function handleUpload(input){
   const file=input.files[0];if(!file)return;
   const div=document.getElementById('upload-result');
+  const key=getGeminiKey();
+  if(!key){
+    div.innerHTML=`<div style="margin:14px;background:var(--warn-lt);border:1px solid #f0c070;border-radius:9px;padding:14px;font-size:13px">
+      尚未設定 Gemini API Key，請先到 <strong>系統設定</strong> 頁面設定。
+      <div style="margin-top:8px"><button class="btn btn-primary btn-sm" onclick="go('settings')">前往設定</button></div></div>`;
+    input.value='';return;
+  }
   div.innerHTML=`<div style="text-align:center;padding:20px;color:var(--ink3)"><div class="ai-spin"></div>AI辨識中...</div>`;
   const b64=await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result.split(',')[1]);r.onerror=rej;r.readAsDataURL(file);});
   try{
-    const res=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({model:'claude-sonnet-4-20250514',max_tokens:1000,messages:[{role:'user',content:[{type:'image',source:{type:'base64',media_type:file.type||'image/jpeg',data:b64}},{type:'text',text:'這是採購/出貨單，只回JSON不含其他文字：{"vendor":"廠商名","date":"YYYY-MM-DD","items":[{"sku":"款號","color":"顏色","price":數字,"quantity":數字}],"notes":"備註"}，無法辨識填null。'}]}]})});
+    const res=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${key}`,{
+      method:'POST',headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({contents:[{parts:[
+        {inline_data:{mime_type:file.type||'image/jpeg',data:b64}},
+        {text:'這是一張採購單或出貨單圖片，請提取資料，只回JSON不含其他文字：{"vendor":"廠商名","date":"YYYY-MM-DD","items":[{"sku":"款號","color":"顏色","price":數字,"quantity":數字}],"notes":"備註"}，無法辨識的欄位填null。'}
+      ]}]})
+    });
     const data=await res.json();
-    const text=data.content?.map(c=>c.text||'').join('').trim();
+    const text=data.candidates?.[0]?.content?.parts?.[0]?.text?.trim()||'';
     let parsed;try{parsed=JSON.parse(text.replace(/```json|```/g,'').trim());}catch(e){parsed=null;}
     if(parsed){div.innerHTML=`<div style="margin:14px;background:var(--success-lt);border:1px solid #8ec8a8;border-radius:9px;padding:14px"><div style="font-size:12.5px;font-weight:600;color:var(--success);margin-bottom:10px">✓ 辨識成功</div><div style="font-size:12.5px;margin-bottom:6px"><strong>廠商：</strong>${parsed.vendor||'未辨識'} &nbsp; <strong>日期：</strong>${parsed.date||'未辨識'}</div>${(parsed.items||[]).map(i=>`<div style="background:#fff;border-radius:6px;padding:7px 10px;margin-bottom:4px;font-size:12px"><span style="font-family:var(--mono);font-weight:600">${i.sku}</span> · ${i.color} · 單價$${i.price} · ${i.quantity}件</div>`).join('')}<div style="margin-top:10px;display:flex;gap:8px"><button class="btn btn-success btn-sm" onclick='importResult(${JSON.stringify(JSON.stringify(parsed))})'>確認匯入並儲存至雲端</button><button class="btn btn-ghost btn-sm" onclick="document.getElementById('upload-result').innerHTML=''">取消</button></div></div>`;}
-    else{div.innerHTML=`<div style="margin:14px;color:var(--accent);font-size:12.5px;padding:12px;background:#fdecea;border-radius:8px">辨識失敗，請手動輸入</div>`;}
-  }catch(e){div.innerHTML=`<div style="margin:14px;color:var(--accent);font-size:12.5px">錯誤：${e.message}</div>`;}
+    else{div.innerHTML=`<div style="margin:14px;color:var(--accent);font-size:12.5px;padding:12px;background:#fdecea;border-radius:8px">辨識失敗，請手動輸入<br><small style="color:var(--ink3)">${text?.slice(0,100)||'無回應'}</small></div>`;}
+  }catch(e){div.innerHTML=`<div style="margin:14px;color:var(--accent);font-size:12.5px;padding:12px;background:#fdecea;border-radius:8px">錯誤：${e.message}</div>`;}
   input.value='';
 }
 async function importResult(json){
