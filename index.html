@@ -925,7 +925,7 @@ function parsePoQuickText(text) {
 
   // Split into SKU groups by digit sequences
   // Each group: SKU (digits) followed by color-qty pairs
-  const skuGroups = skuText.split(/(?=\d{3,})/).filter(Boolean);
+  const skuGroups = skuText.split(/(?<=[^\d\s])\s+(?=\d{3,})|(?<=\s)(?=\d{3,}\s)|(?<=\s)(?=\d{3,}[^\d])/).map(g=>g.trim()).filter(Boolean);
 
   skuGroups.forEach(group => {
     group = group.trim();
@@ -938,10 +938,10 @@ function parsePoQuickText(text) {
 
     // Build regex from color list (longest first to avoid partial matches)
     const colorPattern = COLORS.slice().sort((a,b) => b.length - a.length).join('|');
-    const pairRe = new RegExp(`(${colorPattern})(\d+)`, 'g');
+    const pairRe = new RegExp(`(${colorPattern})\s*(\d+)`, 'g');
     let m;
     while ((m = pairRe.exec(rest)) !== null) {
-      result.items.push({ sku, color: m[1], qty: Number(m[2]), price: 0 });
+      result.items.push({ sku, color: m[1], qty: Number(m[3]), price: 0 });
     }
   });
 
@@ -1013,7 +1013,7 @@ function parseArrivalText() {
   const skuGroups = skuText.split(/[，、,;\s]+(?=\d)/).filter(Boolean);
 
   const colorPattern = COLORS.slice().sort((a,b)=>b.length-a.length).join('|');
-  const pairRe = new RegExp(`(${colorPattern})(\d+)`, 'g');
+  const pairRe = new RegExp(`(${colorPattern})\s*(\d+)`, 'g');
 
   const updates = [];
   const warnings = [];
@@ -1050,7 +1050,7 @@ function parseArrivalText() {
     let m;
     while ((m = pairRe.exec(rest)) !== null) {
       const color = m[1];
-      const qty = Number(m[2]);
+      const qty = Number(m[3]);
       // Find the specific shipment row
       const shipRow = matches.find(s => s.color === color || s.color.startsWith(color) || color.startsWith(s.color));
       if (shipRow) {
