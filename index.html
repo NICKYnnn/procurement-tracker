@@ -324,7 +324,7 @@ input,select,textarea{font-family:var(--font);color:var(--ink)}
         <button class="btn btn-primary btn-sm" onclick="openShipModal()">＋ 新增</button>
       </div>
     </div>
-    <div class="content"><div class="section"><div style="overflow-x:auto"><table class="tbl"><thead><tr><th>日期</th><th>廠商</th><th>款號</th><th>顏色</th><th id="th-price">單價</th><th>發貨</th><th>到貨</th><th id="th-amt">金額</th><th>物流</th><th>單號</th><th>狀態</th><th>付款</th></tr></thead><tbody id="ship-tbody"></tbody></table></div></div></div>
+    <div class="content"><div class="section"><div style="overflow-x:auto"><table class="tbl"><thead><tr><th>日期</th><th>廠商</th><th>款號</th><th>顏色</th><th id="th-price">單價</th><th>發貨</th><th>到貨</th><th id="th-amt">金額</th><th>物流</th><th>單號</th><th>狀態</th><th>付款</th><th></th></tr></thead><tbody id="ship-tbody"></tbody></table></div></div></div>
   </div>
   <div id="page-compare" class="page">
     <div class="topbar">
@@ -467,6 +467,35 @@ input,select,textarea{font-family:var(--font);color:var(--ink)}
     <div class="form-row"><label>廠商</label><select id="im-vendor"></select></div>
     <div class="form-grid g2"><div class="form-row"><label>庫存量</label><input type="number" id="im-qty"></div><div class="form-row"><label>安全庫存下限</label><input type="number" id="im-safe" placeholder="0"></div></div>
     <div class="modal-footer"><button class="btn btn-ghost" onclick="closeOv('inv-modal')">取消</button><button class="btn btn-primary" onclick="saveInv()">儲存至雲端</button></div>
+  </div>
+</div>
+
+<!-- Edit Shipment Modal -->
+<div class="overlay" id="edit-ship-modal">
+  <div class="modal">
+    <h3>編輯出貨記錄</h3>
+    <input type="hidden" id="esm-id">
+    <div class="form-grid g2"><div class="form-row"><label>廠商</label><select id="esm-vendor"></select></div><div class="form-row"><label>日期</label><input type="date" id="esm-date"></div></div>
+    <div class="form-grid g3"><div class="form-row"><label>款號</label><input type="text" id="esm-sku"></div><div class="form-row"><label>顏色</label><input type="text" id="esm-color"></div><div class="form-row" id="esm-price-row"><label>單價</label><input type="number" id="esm-price"></div></div>
+    <div class="form-grid g2"><div class="form-row"><label>發貨數量</label><input type="number" id="esm-shipped"></div><div class="form-row"><label>到貨數量</label><input type="number" id="esm-received" placeholder="留空=尚未到貨"></div></div>
+    <div class="form-grid g2"><div class="form-row"><label>狀態</label><select id="esm-status"><option>待出貨</option><option>已出貨</option><option>已到貨</option><option>數量短缺</option></select></div><div class="form-row"><label>物流方式</label><select id="esm-logistics"><option value="">未指定</option><option>海運</option><option>空運</option><option>海快</option><option>其他</option></select></div></div>
+    <div class="form-grid g2"><div class="form-row"><label>物流單號</label><input type="text" id="esm-tracking"></div><div class="form-row"><label>備註</label><input type="text" id="esm-note"></div></div>
+    <div class="modal-footer"><button class="btn btn-ghost" onclick="closeOv('edit-ship-modal')">取消</button><button class="btn btn-primary" onclick="saveEditShipment()">儲存</button></div>
+  </div>
+</div>
+
+<!-- Edit PO Modal -->
+<div class="overlay" id="edit-po-modal">
+  <div class="modal">
+    <h3>編輯採購單</h3>
+    <input type="hidden" id="epo-id">
+    <div class="form-grid g2"><div class="form-row"><label>廠商</label><select id="epo-vendor"></select></div><div class="form-row"><label>採購日期</label><input type="date" id="epo-date"></div></div>
+    <div class="form-row"><label>備註</label><input type="text" id="epo-note"></div>
+    <div style="font-size:12px;font-weight:600;color:var(--ink2);margin:10px 0 8px">採購品項</div>
+    <div id="epo-items-wrap"></div>
+    <button class="btn btn-ghost btn-sm" onclick="addEpoItem()" style="margin-bottom:12px">＋ 新增品項</button>
+    <div class="form-grid g2"><div class="form-row"><label>承諾出貨日</label><input type="date" id="epo-promise"></div><div class="form-row"><label>提前幾天提醒</label><select id="epo-remind"><option value="0">當天</option><option value="1">1天前</option><option value="2" selected>2天前</option><option value="3">3天前</option><option value="7">1週前</option></select></div></div>
+    <div class="modal-footer"><button class="btn btn-ghost" onclick="closeOv('edit-po-modal')">取消</button><button class="btn btn-primary" onclick="saveEditPO()">儲存</button></div>
   </div>
 </div>
 <div class="toast" id="toast"></div>
@@ -669,7 +698,7 @@ function renderPO(){
     return `<div class="po-card"><div class="po-card-hd"><div style="flex:1"><div class="po-num">${po.id} · ${po.date}</div><div class="po-vendor">${po.vendorName}</div></div>${poStBdg(po)}</div>
       <div class="po-card-body"><span>📦 ${totalQty}件</span>${cfg.showPrice?`<span>💰 $${totalAmt.toLocaleString()}</span>`:''} ${promiseLine}${po.note?`<span style="color:var(--ink3)">📝${po.note}</span>`:''}</div>
       <div class="po-items-wrap">${items.map(i=>`<div class="po-item-row"><span class="sku">${i.sku}</span>${cdot(i.color)}<span>${i.color}</span><span style="color:var(--ink3)">×${i.qty}</span>${cfg.showPrice?`<span style="color:var(--ink2)">@$${i.price}=$${(Number(i.qty)*Number(i.price)).toLocaleString()}</span>`:''}</div>`).join('')}</div>
-      <div class="po-actions">${st!=='done'?`<button class="btn btn-ghost btn-sm" onclick="openPromiseModal('${po.id}')">更新承諾日</button><button class="btn btn-success btn-sm" onclick="markDone('${po.id}')">確認到貨</button>`:bdg('已完成','b-ok')}${st==='overdue'?`<button class="btn btn-primary btn-sm">🚨 追廠商</button>`:''}</div></div>`;
+      <div class="po-actions">${st!=='done'?`<button class="btn btn-ghost btn-sm" onclick="openPromiseModal('${po.id}')">更新承諾日</button><button class="btn btn-success btn-sm" onclick="markDone('${po.id}')">確認到貨</button>`:bdg('已完成','b-ok')}${st==='overdue'?`<button class="btn btn-primary btn-sm">🚨 追廠商</button>`:''}<button class="btn btn-ghost btn-sm" onclick="editPO('${po.id}')">編輯</button><button class="btn btn-xs" style="background:#fdecea;color:#b52a1a;border:none;padding:5px 10px;border-radius:7px" onclick="deletePO('${po.id}')">刪除</button></div></div>`;
   }).join('');
 }
 
@@ -697,7 +726,7 @@ function renderShipments(){
   const vf=document.getElementById('ship-vf').value;
   const rows=DB.shipments.filter(s=>!vf||s.vendorName===vf);
   document.getElementById('ship-tbody').innerHTML=rows.map(s=>{const amt=Number(s.price||0)*Number(s.received||s.shipped||0);const trackHtml=s.tracking?`<a href="https://www.google.com/search?q=${encodeURIComponent((s.logistics||'')+' '+s.tracking)}" target="_blank" style="font-family:var(--mono);font-size:11px;color:var(--info);text-decoration:none">${s.tracking}</a>`:'—';const paymentBadge = isNonMonthlyVendor(s.vendorName) ? (s.paymentStatus==='paid'?`<button class="badge b-ok" style="cursor:pointer;border:none" onclick="togglePayment('${s.id}','unpaid')">已付款</button>`:`<button class="badge b-danger" style="cursor:pointer;border:none" onclick="togglePayment('${s.id}','paid')">未付款</button>`) : '';
-    return `<tr><td style="color:var(--ink3);font-size:11.5px">${s.date}</td><td>${s.vendorName}</td><td class="mono">${s.sku}</td><td>${cdot(s.color)}${s.color}</td>${cfg.showPrice?`<td class="mono">$${Number(s.price||0)}</td>`:''}<td class="mono">${s.shipped}</td><td class="mono">${s.received||'—'}</td>${cfg.showPrice?`<td class="mono" style="font-weight:600">$${amt.toLocaleString()}</td>`:''}<td style="font-size:12px;color:var(--ink2)">${s.logistics||'—'}</td><td>${trackHtml}</td><td>${shipBdg(s.status)}</td>${paymentBadge?`<td>${paymentBadge}</td>`:''}</tr>`}).join('')||'<tr><td colspan="9" style="padding:20px;text-align:center;color:var(--ink3)">暫無記錄</td></tr>';
+    return `<tr><td style="color:var(--ink3);font-size:11.5px">${s.date}</td><td>${s.vendorName}</td><td class="mono">${s.sku}</td><td>${cdot(s.color)}${s.color}</td>${cfg.showPrice?`<td class="mono">$${Number(s.price||0)}</td>`:''}<td class="mono">${s.shipped}</td><td class="mono">${s.received||'—'}</td>${cfg.showPrice?`<td class="mono" style="font-weight:600">$${amt.toLocaleString()}</td>`:''}<td style="font-size:12px;color:var(--ink2)">${s.logistics||'—'}</td><td>${trackHtml}</td><td>${shipBdg(s.status)}</td>${paymentBadge?`<td>${paymentBadge}</td>`:'<td></td>'}<td style="white-space:nowrap"><button class="btn btn-ghost btn-xs" onclick="editShipment('${s.id}')">編輯</button> <button class="btn btn-xs" style="background:#fdecea;color:#b52a1a;border:none" onclick="deleteShipment('${s.id}')">刪除</button></td></tr>`}).join('')||'<tr><td colspan="9" style="padding:20px;text-align:center;color:var(--ink3)">暫無記錄</td></tr>';
 }
 function openShipModal(){updateVendorSelects();document.getElementById('sm-date').value=todayStr();document.getElementById('sm-logistics').value='';document.getElementById('sm-tracking').value='';document.getElementById('sm-payment').value='';document.getElementById('sm-payment-date').value='';document.getElementById('ship-modal').classList.add('open');setTimeout(checkPaymentField,100);}
 async function saveShipment(){
@@ -1185,6 +1214,167 @@ function checkPaymentField() {
   const vendor = document.getElementById('sm-vendor').value;
   const row = document.getElementById('sm-payment-row');
   if (row) row.style.display = isNonMonthlyVendor(vendor) ? 'block' : 'none';
+}
+
+
+// ══ DELETE & EDIT SHIPMENT ════════════════════════════════════════════════════
+async function deleteShipment(id) {
+  if (!confirm('確定要刪除這筆出貨記錄？')) return;
+  try {
+    await api('deleteRow', { sheetName: 'Shipments', id });
+    toast('已刪除 ✓');
+    await loadAll();
+  } catch(e) {}
+}
+
+function editShipment(id) {
+  const s = DB.shipments.find(x => x.id === id);
+  if (!s) return;
+  updateVendorSelects();
+  document.getElementById('esm-id').value = id;
+  document.getElementById('esm-date').value = s.date || '';
+  document.getElementById('esm-sku').value = s.sku || '';
+  document.getElementById('esm-color').value = s.color || '';
+  document.getElementById('esm-price').value = s.price || 0;
+  document.getElementById('esm-shipped').value = s.shipped || 0;
+  document.getElementById('esm-received').value = s.received || '';
+  document.getElementById('esm-note').value = s.note || '';
+  document.getElementById('esm-logistics').value = s.logistics || '';
+  document.getElementById('esm-tracking').value = s.tracking || '';
+  // Set vendor
+  const vendorSel = document.getElementById('esm-vendor');
+  for (let opt of vendorSel.options) { if (opt.value === s.vendorName) { opt.selected = true; break; } }
+  // Set status
+  const statusSel = document.getElementById('esm-status');
+  for (let opt of statusSel.options) { if (opt.value === s.status) { opt.selected = true; break; } }
+  // Show/hide price for helper
+  const cfg = ROLE_CFG[currentUser.role];
+  document.getElementById('esm-price-row').style.display = cfg.showPrice ? '' : 'none';
+  document.getElementById('edit-ship-modal').classList.add('open');
+}
+
+async function saveEditShipment() {
+  const id = document.getElementById('esm-id').value;
+  const updates = {
+    date: document.getElementById('esm-date').value,
+    vendorName: document.getElementById('esm-vendor').value,
+    sku: document.getElementById('esm-sku').value,
+    color: document.getElementById('esm-color').value,
+    price: document.getElementById('esm-price').value || 0,
+    shipped: document.getElementById('esm-shipped').value || 0,
+    received: document.getElementById('esm-received').value || '',
+    status: document.getElementById('esm-status').value,
+    note: document.getElementById('esm-note').value,
+    logistics: document.getElementById('esm-logistics').value,
+    tracking: document.getElementById('esm-tracking').value,
+  };
+  try {
+    await api('updateShipment', { id, updates });
+    toast('已更新 ✓');
+    closeOv('edit-ship-modal');
+    await loadAll();
+  } catch(e) {}
+}
+
+// ══ DELETE & EDIT PO ══════════════════════════════════════════════════════════
+async function deletePO(id) {
+  if (!confirm('確定要刪除這筆採購單？')) return;
+  try {
+    await api('deleteRow', { sheetName: 'PurchaseOrders', id });
+    toast('已刪除 ✓');
+    await loadAll();
+  } catch(e) {}
+}
+
+let epoItemCount = 0;
+function editPO(id) {
+  const po = DB.pos.find(x => x.id === id);
+  if (!po) return;
+  updateVendorSelects();
+  document.getElementById('epo-id').value = id;
+  document.getElementById('epo-date').value = po.date || '';
+  document.getElementById('epo-note').value = po.note || '';
+  document.getElementById('epo-promise').value = po.promiseDate || '';
+  // Set vendor
+  const vendorSel = document.getElementById('epo-vendor');
+  for (let opt of vendorSel.options) { if (opt.value === po.vendorName) { opt.selected = true; break; } }
+  // Set remind
+  const remindSel = document.getElementById('epo-remind');
+  for (let opt of remindSel.options) { if (opt.value === String(po.remindDays||2)) { opt.selected = true; break; } }
+  // Fill items
+  let items = [];
+  try { items = typeof po.items === 'string' ? JSON.parse(po.items) : (po.items || []); } catch(e) {}
+  epoItemCount = 0;
+  const wrap = document.getElementById('epo-items-wrap');
+  wrap.innerHTML = '';
+  items.forEach((item) => {
+    const d = document.createElement('div');
+    d.innerHTML = makeEpoRow(epoItemCount);
+    wrap.appendChild(d.firstChild);
+    const i = epoItemCount;
+    setTimeout(() => {
+      const skuEl = document.getElementById('epi-sku-' + i);
+      const colorEl = document.getElementById('epi-color-' + i);
+      const priceEl = document.getElementById('epi-price-' + i);
+      const qtyEl = document.getElementById('epi-qty-' + i);
+      if (skuEl) skuEl.value = item.sku || '';
+      if (colorEl) colorEl.value = item.color || '';
+      if (priceEl) priceEl.value = item.price || 0;
+      if (qtyEl) qtyEl.value = item.qty || 0;
+    }, 0);
+    epoItemCount++;
+  });
+  if (!items.length) { const d = document.createElement('div'); d.innerHTML = makeEpoRow(epoItemCount++); wrap.appendChild(d.firstChild); }
+  document.getElementById('edit-po-modal').classList.add('open');
+}
+
+function makeEpoRow(i) {
+  const cfg = ROLE_CFG[currentUser.role];
+  return `<div class="form-grid ${cfg.showPrice?'g3':'g2'}" id="epi-${i}" style="margin-bottom:8px">
+    <div class="form-row" style="margin:0"><label style="${i?'display:none':''}">款號</label><input type="text" id="epi-sku-${i}" placeholder="款號"></div>
+    <div class="form-row" style="margin:0"><label style="${i?'display:none':''}">顏色</label><input type="text" id="epi-color-${i}" placeholder="顏色"></div>
+    ${cfg.showPrice?`<div class="form-row" style="margin:0"><label style="${i?'display:none':''}">單價</label><input type="number" id="epi-price-${i}" placeholder="0"></div>`:`<input type="hidden" id="epi-price-${i}" value="0">`}
+    <div class="form-row" style="margin:0"><label style="${i?'display:none':''}">數量</label><input type="number" id="epi-qty-${i}" placeholder="0"></div>
+    ${i?`<div style="display:flex;align-items:flex-end;padding-bottom:2px"><button class="btn btn-ghost btn-xs" onclick="document.getElementById('epi-${i}').remove()">✕</button></div>`:'<div></div>'}
+  </div>`;
+}
+
+function addEpoItem() {
+  const w = document.getElementById('epo-items-wrap');
+  const d = document.createElement('div');
+  d.innerHTML = makeEpoRow(epoItemCount++);
+  w.appendChild(d.firstChild);
+}
+
+async function saveEditPO() {
+  const id = document.getElementById('epo-id').value;
+  const items = [];
+  for (let i = 0; i < epoItemCount; i++) {
+    const skuEl = document.getElementById('epi-sku-' + i);
+    if (!skuEl) continue;
+    const sku = skuEl.value;
+    if (!sku) continue;
+    items.push({
+      sku,
+      color: document.getElementById('epi-color-' + i)?.value || '—',
+      price: Number(document.getElementById('epi-price-' + i)?.value) || 0,
+      qty: Number(document.getElementById('epi-qty-' + i)?.value) || 0,
+    });
+  }
+  const updates = {
+    vendorName: document.getElementById('epo-vendor').value,
+    date: document.getElementById('epo-date').value,
+    note: document.getElementById('epo-note').value,
+    promiseDate: document.getElementById('epo-promise').value,
+    remindDays: document.getElementById('epo-remind').value,
+    items: JSON.stringify(items),
+  };
+  try {
+    await api('updatePO', { id, updates });
+    toast('採購單已更新 ✓');
+    closeOv('edit-po-modal');
+    await loadAll();
+  } catch(e) {}
 }
 
 async function togglePayment(id, newStatus) {
