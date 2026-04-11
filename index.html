@@ -354,8 +354,8 @@ input,select,textarea{font-family:var(--font);color:var(--ink)}
         <div class="sec-hd"><h2>AI 辨識設定</h2></div>
         <div style="padding:20px">
           <div style="background:var(--info-lt);border:1px solid #a0c8f0;border-radius:9px;padding:14px 16px;margin-bottom:18px;font-size:12.5px;color:var(--info);line-height:1.65">
-            <strong style="color:var(--info)">Gemini API Key 儲存在你的瀏覽器本機，不會上傳到任何伺服器。</strong><br>
-            每台裝置需要各自設定一次。申請免費 Key：<a href="https://aistudio.google.com/apikey" target="_blank" style="color:var(--info)">aistudio.google.com/apikey</a>
+            <strong style="color:var(--info)">管理員設定一次，所有裝置登入後自動生效。小幫手看不到此設定頁面，但可以使用 AI 辨識功能。</strong><br>
+            申請免費 Key：<a href="https://aistudio.google.com/apikey" target="_blank" style="color:var(--info)">aistudio.google.com/apikey</a>（每天免費 1,500 次）
           </div>
           <div class="form-row" style="margin-bottom:14px">
             <label style="display:block;font-size:11.5px;font-weight:500;color:var(--ink2);margin-bottom:6px">Gemini API Key</label>
@@ -451,7 +451,7 @@ let currentUser=null;
 let DB={pos:[],shipments:[],vendors:[],inventory:[]};
 const ROLE_CFG={
   admin:{pages:['dashboard','po','upload','shipments','compare','inventory','billing','vendors','settings'],showPrice:true,showBilling:true},
-  helper:{pages:['dashboard','po','inventory','compare','settings'],showPrice:false,showBilling:false}
+  helper:{pages:['dashboard','po','inventory','compare','upload'],showPrice:false,showBilling:false}
 };
 
 async function api(action,body={}){
@@ -511,7 +511,7 @@ async function loadAll(){
   try{
     const[posRes,shipsRes,vendorsRes,invRes]=await Promise.all([api('getPOs'),api('getShipments'),api('getVendors'),api('getInventory')]);
     DB.pos=posRes.rows||[];DB.shipments=shipsRes.rows||[];DB.vendors=vendorsRes.rows||[];DB.inventory=invRes.rows||[];
-    setSyncState('ok');updateVendorSelects();renderCurrentPage();
+    setSyncState('ok');updateVendorSelects();renderCurrentPage();loadGeminiKey();
   }catch(e){setSyncState('err');}
 }
 
@@ -726,27 +726,48 @@ async function saveVendor(){
   try{await api('addVendor',{row});toast('廠商已新增 ✓');closeOv('vendor-modal');await loadAll();}catch(e){}
 }
 
-// ── Gemini Key management ────────────────────────────────────────────────────
-function getGeminiKey(){return localStorage.getItem('gemini_api_key')||'';}
-function saveGeminiKey(){
+// ── Gemini Key management (stored in Google Sheets, admin only) ───────────────
+let _geminiKey=''; // cached after login
+
+function getGeminiKey(){ return _geminiKey; }
+
+async function saveGeminiKey(){
   const key=document.getElementById('gemini-key-input').value.trim();
   if(!key){toast('請輸入 API Key',true);return;}
-  localStorage.setItem('gemini_api_key',key);
-  document.getElementById('key-status').innerHTML='<span style="color:var(--success)">✓ 已儲存到本機瀏覽器</span>';
-  toast('API Key 已儲存 ✓');
+  try{
+    await api('saveConfig',{key:'gemini_api_key',value:key});
+    _geminiKey=key;
+    document.getElementById('gemini-key-input').value='●'.repeat(20);
+    document.getElementById('key-status').innerHTML='<span style="color:var(--success)">✓ 已儲存至雲端，所有裝置登入後自動生效</span>';
+    toast('API Key 已儲存至雲端 ✓');
+  }catch(e){}
 }
-function clearGeminiKey(){
-  localStorage.removeItem('gemini_api_key');
-  document.getElementById('gemini-key-input').value='';
-  document.getElementById('key-status').textContent='已清除';
-  toast('API Key 已清除');
+
+async function clearGeminiKey(){
+  try{
+    await api('saveConfig',{key:'gemini_api_key',value:''});
+    _geminiKey='';
+    document.getElementById('gemini-key-input').value='';
+    document.getElementById('key-status').textContent='已清除';
+    toast('API Key 已清除');
+  }catch(e){}
 }
-function renderSettings(){
-  const key=getGeminiKey();
+
+async function renderSettings(){
   const input=document.getElementById('gemini-key-input');
   const status=document.getElementById('key-status');
-  if(input){input.value=key?'●'.repeat(20):'';}
-  if(status){status.innerHTML=key?'<span style="color:var(--success)">✓ 已設定 API Key</span>':'<span style="color:var(--ink3)">尚未設定</span>';}
+  if(input) input.value=_geminiKey?'●'.repeat(20):'';
+  if(status) status.innerHTML=_geminiKey
+    ?'<span style="color:var(--success)">✓ 已設定 API Key（所有裝置共用）</span>'
+    :'<span style="color:var(--ink3)">尚未設定</span>';
+}
+
+async function loadGeminiKey(){
+  // called after login for all users - key fetched silently
+  try{
+    const res=await api('getConfig',{key:'gemini_api_key'});
+    if(res&&res.value) _geminiKey=res.value;
+  }catch(e){}
 }
 async function testGemini(){
   const key=getGeminiKey();
@@ -754,7 +775,7 @@ async function testGemini(){
   if(!key){statusEl.innerHTML='<span style="color:var(--accent)">請先設定 API Key</span>';return;}
   statusEl.innerHTML='<span style="color:var(--warn)">測試中...</span>';
   try{
-    const res=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${key}`,{
+    const res=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`,{
       method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({contents:[{parts:[{text:'回覆OK'}]}]})
     });
@@ -778,7 +799,7 @@ async function handleUpload(input){
   div.innerHTML=`<div style="text-align:center;padding:20px;color:var(--ink3)"><div class="ai-spin"></div>AI辨識中...</div>`;
   const b64=await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result.split(',')[1]);r.onerror=rej;r.readAsDataURL(file);});
   try{
-    const res=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-flash:generateContent?key=${key}`,{
+    const res=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`,{
       method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({contents:[{parts:[
         {inline_data:{mime_type:file.type||'image/jpeg',data:b64}},
