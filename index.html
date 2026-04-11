@@ -300,6 +300,19 @@ input,select,textarea{font-family:var(--font);color:var(--ink)}
         <div id="upload-result"></div>
       </div>
       <div class="section"><div class="sec-hd"><h2>手動新增出貨記錄</h2><button class="btn btn-primary btn-sm" onclick="openShipModal()">＋ 新增</button></div><div style="padding:16px;color:var(--ink3);font-size:12.5px;text-align:center">或手動輸入單據資料</div></div>
+      <div class="section">
+        <div class="sec-hd"><h2>到貨確認（文字輸入）</h2></div>
+        <div style="padding:16px">
+          <div style="background:var(--success-lt);border:1px solid #8ec8a8;border-radius:9px;padding:12px 14px;margin-bottom:12px;font-size:12.5px;color:var(--success);line-height:1.65">
+            <strong>輸入到貨資訊，系統自動匹配出貨記錄</strong><br>
+            格式：日期到貨 款號顏色數量、款號顏色數量<br>
+            例：4/12到貨 123黑10白10銀5、8874黑10白10
+          </div>
+          <textarea id="arrival-text" placeholder="4/12到貨 123黑10白10銀5、8874黑10白10" style="width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:7px;font-size:13px;min-height:80px;resize:vertical;outline:none;font-family:var(--font);margin-bottom:10px"></textarea>
+          <button class="btn btn-primary" onclick="parseArrivalText()">解析並更新到貨</button>
+          <div id="arrival-result" style="margin-top:12px"></div>
+        </div>
+      </div>
     </div>
   </div>
   <div id="page-shipments" class="page">
@@ -311,7 +324,7 @@ input,select,textarea{font-family:var(--font);color:var(--ink)}
         <button class="btn btn-primary btn-sm" onclick="openShipModal()">＋ 新增</button>
       </div>
     </div>
-    <div class="content"><div class="section"><div style="overflow-x:auto"><table class="tbl"><thead><tr><th>日期</th><th>廠商</th><th>款號</th><th>顏色</th><th id="th-price">單價</th><th>發貨</th><th>到貨</th><th id="th-amt">金額</th><th>物流</th><th>單號</th><th>狀態</th></tr></thead><tbody id="ship-tbody"></tbody></table></div></div></div>
+    <div class="content"><div class="section"><div style="overflow-x:auto"><table class="tbl"><thead><tr><th>日期</th><th>廠商</th><th>款號</th><th>顏色</th><th id="th-price">單價</th><th>發貨</th><th>到貨</th><th id="th-amt">金額</th><th>物流</th><th>單號</th><th>狀態</th><th>付款</th></tr></thead><tbody id="ship-tbody"></tbody></table></div></div></div>
   </div>
   <div id="page-compare" class="page">
     <div class="topbar">
@@ -389,13 +402,20 @@ input,select,textarea{font-family:var(--font);color:var(--ink)}
 
 <!-- Modals -->
 <div class="overlay" id="po-modal">
-  <div class="modal">
+  <div class="modal" style="max-width:560px">
     <h3>建立採購單</h3>
-    <div class="form-grid g2"><div class="form-row"><label>廠商</label><select id="pm-vendor"></select></div><div class="form-row"><label>採購日期</label><input type="date" id="pm-date"></div></div>
+    <!-- Quick text input -->
+    <div style="background:var(--info-lt);border:1px solid #a0c8f0;border-radius:9px;padding:12px 14px;margin-bottom:14px">
+      <div style="font-size:12px;font-weight:600;color:var(--info);margin-bottom:6px">快速輸入（AI 自動解析）</div>
+      <textarea id="pm-quicktext" placeholder="例：4/10 新秀 8728黑50咖啡35白50 8874紅30白20&#10;或：白溝8728 黑50 白50、8874 紅30" style="width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:7px;font-size:13px;min-height:70px;resize:vertical;outline:none;font-family:var(--font)"></textarea>
+      <button class="btn btn-primary btn-sm" style="margin-top:8px" onclick="parsePoText()">AI 解析</button>
+      <div id="pm-parse-result" style="margin-top:8px;font-size:12px;color:var(--ink3)"></div>
+    </div>
+    <div class="form-grid g2"><div class="form-row"><label>廠商（解析後自動填入，可修改）</label><select id="pm-vendor"></select></div><div class="form-row"><label>採購日期</label><input type="date" id="pm-date"></div></div>
     <div class="form-row"><label>備註</label><input type="text" id="pm-note" placeholder="選填"></div>
-    <div style="font-size:12px;font-weight:600;color:var(--ink2);margin:12px 0 8px">採購品項</div>
+    <div style="font-size:12px;font-weight:600;color:var(--ink2);margin:10px 0 8px">採購品項（解析後自動填入，可手動調整）</div>
     <div id="po-items-wrap"></div>
-    <button class="btn btn-ghost btn-sm" onclick="addPoItem()" style="margin-bottom:14px">＋ 新增品項</button>
+    <button class="btn btn-ghost btn-sm" onclick="addPoItem()" style="margin-bottom:14px">＋ 手動新增品項</button>
     <div style="background:var(--warn-lt);border:1px solid #f0c070;border-radius:8px;padding:12px 14px">
       <div style="font-size:12px;font-weight:600;color:var(--warn);margin-bottom:8px">📅 廠商承諾出貨日</div>
       <div class="form-grid g2"><div class="form-row"><label>承諾出貨日</label><input type="date" id="pm-promise"></div><div class="form-row"><label>提前幾天提醒</label><select id="pm-remind"><option value="0">當天</option><option value="1">1天前</option><option value="2" selected>2天前</option><option value="3">3天前</option><option value="7">1週前</option></select></div></div>
@@ -406,10 +426,17 @@ input,select,textarea{font-family:var(--font);color:var(--ink)}
 <div class="overlay" id="ship-modal">
   <div class="modal">
     <h3>新增出貨記錄</h3>
-    <div class="form-grid g2"><div class="form-row"><label>廠商</label><select id="sm-vendor"></select></div><div class="form-row"><label>日期</label><input type="date" id="sm-date"></div></div>
+    <div class="form-grid g2"><div class="form-row"><label>廠商</label><select id="sm-vendor" onchange="checkPaymentField()"></select></div><div class="form-row"><label>日期</label><input type="date" id="sm-date"></div></div>
     <div class="form-grid g3"><div class="form-row"><label>款號</label><input type="text" id="sm-sku" placeholder="A2024-01"></div><div class="form-row"><label>顏色</label><input type="text" id="sm-color" placeholder="紅色"></div><div class="form-row" id="sm-price-row"><label>單價</label><input type="number" id="sm-price" placeholder="0"></div></div>
     <div class="form-grid g2"><div class="form-row"><label>發貨數量</label><input type="number" id="sm-shipped" placeholder="0"></div><div class="form-row"><label>到貨數量</label><input type="number" id="sm-received" placeholder="留空=尚未到貨"></div></div>
     <div class="form-grid g2"><div class="form-row"><label>狀態</label><select id="sm-status"><option>待出貨</option><option selected>已出貨</option><option>已到貨</option><option>數量短缺</option></select></div><div class="form-row"><label>備註</label><input type="text" id="sm-note" placeholder="選填"></div></div>
+    <div class="form-row" id="sm-payment-row" style="display:none">
+      <label>付款狀態</label>
+      <div style="display:flex;gap:8px">
+        <select id="sm-payment" style="flex:1"><option value="">未設定</option><option value="unpaid">未付款</option><option value="paid">已付款</option></select>
+        <input type="date" id="sm-payment-date" style="flex:1" title="付款日期">
+      </div>
+    </div>
     <div class="form-grid g2"><div class="form-row"><label>物流方式</label><select id="sm-logistics"><option value="">未指定</option><option>海運</option><option>空運</option><option>海快</option><option>其他</option></select></div><div class="form-row"><label>物流單號</label><input type="text" id="sm-tracking" placeholder="輸入追蹤號碼"></div></div>
     <div class="modal-footer"><button class="btn btn-ghost" onclick="closeOv('ship-modal')">取消</button><button class="btn btn-primary" onclick="saveShipment()">儲存至雲端</button></div>
   </div>
@@ -646,7 +673,7 @@ function renderPO(){
 }
 
 let piCount=1;
-function openPoModal(){piCount=1;document.getElementById('pm-date').value=todayStr();document.getElementById('pm-promise').value='';document.getElementById('pm-note').value='';updateVendorSelects();document.getElementById('po-items-wrap').innerHTML=makePoRow(0);document.getElementById('po-modal').classList.add('open');}
+function openPoModal(){piCount=0;document.getElementById('pm-quicktext').value='';document.getElementById('pm-parse-result').textContent='';document.getElementById('pm-date').value=todayStr();document.getElementById('pm-promise').value='';document.getElementById('pm-note').value='';updateVendorSelects();document.getElementById('po-items-wrap').innerHTML=makePoRow(piCount++);document.getElementById('po-modal').classList.add('open');}
 function makePoRow(i){const cfg=ROLE_CFG[currentUser.role];return `<div class="form-grid ${cfg.showPrice?'g3':'g2'}" id="pi-${i}" style="margin-bottom:8px"><div class="form-row" style="margin:0"><label style="${i?'display:none':''}">款號</label><input type="text" id="pi-sku-${i}" placeholder="A2024-01"></div><div class="form-row" style="margin:0"><label style="${i?'display:none':''}">顏色</label><input type="text" id="pi-color-${i}" placeholder="紅色"></div>${cfg.showPrice?`<div class="form-row" style="margin:0"><label style="${i?'display:none':''}">單價</label><input type="number" id="pi-price-${i}" placeholder="0"></div>`:`<input type="hidden" id="pi-price-${i}" value="0">`}<div class="form-row" style="margin:0"><label style="${i?'display:none':''}">數量</label><input type="number" id="pi-qty-${i}" placeholder="0"></div>${i?`<div style="display:flex;align-items:flex-end;padding-bottom:2px"><button class="btn btn-ghost btn-xs" onclick="document.getElementById('pi-${i}').remove()">✕</button></div>`:'<div></div>'}</div>`;}
 function addPoItem(){const w=document.getElementById('po-items-wrap');const d=document.createElement('div');d.innerHTML=makePoRow(piCount++);w.appendChild(d.firstChild);}
 
@@ -668,12 +695,13 @@ function renderShipments(){
   const cfg=ROLE_CFG[currentUser.role];
   const vf=document.getElementById('ship-vf').value;
   const rows=DB.shipments.filter(s=>!vf||s.vendorName===vf);
-  document.getElementById('ship-tbody').innerHTML=rows.map(s=>{const amt=Number(s.price||0)*Number(s.received||s.shipped||0);const trackHtml=s.tracking?`<a href="https://www.google.com/search?q=${encodeURIComponent((s.logistics||'')+' '+s.tracking)}" target="_blank" style="font-family:var(--mono);font-size:11px;color:var(--info);text-decoration:none">${s.tracking}</a>`:'—';return `<tr><td style="color:var(--ink3);font-size:11.5px">${s.date}</td><td>${s.vendorName}</td><td class="mono">${s.sku}</td><td>${cdot(s.color)}${s.color}</td>${cfg.showPrice?`<td class="mono">$${Number(s.price||0)}</td>`:''}<td class="mono">${s.shipped}</td><td class="mono">${s.received||'—'}</td>${cfg.showPrice?`<td class="mono" style="font-weight:600">$${amt.toLocaleString()}</td>`:''}<td style="font-size:12px;color:var(--ink2)">${s.logistics||'—'}</td><td>${trackHtml}</td><td>${shipBdg(s.status)}</td></tr>`;}).join('')||'<tr><td colspan="9" style="padding:20px;text-align:center;color:var(--ink3)">暫無記錄</td></tr>';
+  document.getElementById('ship-tbody').innerHTML=rows.map(s=>{const amt=Number(s.price||0)*Number(s.received||s.shipped||0);const trackHtml=s.tracking?`<a href="https://www.google.com/search?q=${encodeURIComponent((s.logistics||'')+' '+s.tracking)}" target="_blank" style="font-family:var(--mono);font-size:11px;color:var(--info);text-decoration:none">${s.tracking}</a>`:'—';const paymentBadge = isNonMonthlyVendor(s.vendorName) ? (s.paymentStatus==='paid'?`<button class="badge b-ok" style="cursor:pointer;border:none" onclick="togglePayment('${s.id}','unpaid')">已付款</button>`:`<button class="badge b-danger" style="cursor:pointer;border:none" onclick="togglePayment('${s.id}','paid')">未付款</button>`) : '';
+    return `<tr><td style="color:var(--ink3);font-size:11.5px">${s.date}</td><td>${s.vendorName}</td><td class="mono">${s.sku}</td><td>${cdot(s.color)}${s.color}</td>${cfg.showPrice?`<td class="mono">$${Number(s.price||0)}</td>`:''}<td class="mono">${s.shipped}</td><td class="mono">${s.received||'—'}</td>${cfg.showPrice?`<td class="mono" style="font-weight:600">$${amt.toLocaleString()}</td>`:''}<td style="font-size:12px;color:var(--ink2)">${s.logistics||'—'}</td><td>${trackHtml}</td><td>${shipBdg(s.status)}</td>${paymentBadge?`<td>${paymentBadge}</td>`:''}</tr>`}).join('')||'<tr><td colspan="9" style="padding:20px;text-align:center;color:var(--ink3)">暫無記錄</td></tr>';
 }
-function openShipModal(){updateVendorSelects();document.getElementById('sm-date').value=todayStr();document.getElementById('sm-logistics').value='';document.getElementById('sm-tracking').value='';document.getElementById('ship-modal').classList.add('open');}
+function openShipModal(){updateVendorSelects();document.getElementById('sm-date').value=todayStr();document.getElementById('sm-logistics').value='';document.getElementById('sm-tracking').value='';document.getElementById('sm-payment').value='';document.getElementById('sm-payment-date').value='';document.getElementById('ship-modal').classList.add('open');setTimeout(checkPaymentField,100);}
 async function saveShipment(){
   const rec=document.getElementById('sm-received').value;
-  const row={date:document.getElementById('sm-date').value,vendorName:document.getElementById('sm-vendor').value,sku:document.getElementById('sm-sku').value||'—',color:document.getElementById('sm-color').value||'—',price:document.getElementById('sm-price').value||0,shipped:document.getElementById('sm-shipped').value||0,received:rec||'',status:document.getElementById('sm-status').value,note:document.getElementById('sm-note').value,logistics:document.getElementById('sm-logistics').value||'',tracking:document.getElementById('sm-tracking').value||'',createdBy:currentUser.username};
+  const row={date:document.getElementById('sm-date').value,vendorName:document.getElementById('sm-vendor').value,sku:document.getElementById('sm-sku').value||'—',color:document.getElementById('sm-color').value||'—',price:document.getElementById('sm-price').value||0,shipped:document.getElementById('sm-shipped').value||0,received:rec||'',status:document.getElementById('sm-status').value,note:document.getElementById('sm-note').value,logistics:document.getElementById('sm-logistics').value||'',tracking:document.getElementById('sm-tracking').value||'',paymentStatus:document.getElementById('sm-payment').value||'',paymentDate:document.getElementById('sm-payment-date').value||'',createdBy:currentUser.username};
   try{await api('addShipment',{row});toast('出貨記錄已儲存 ✓');closeOv('ship-modal');await loadAll();}catch(e){}
 }
 
@@ -816,7 +844,8 @@ async function handleUpload(input){
 }
 async function importResult(json){
   const p=JSON.parse(json);
-  for(const i of(p.items||[])){const row={date:p.date||todayStr(),vendorName:p.vendor||'未知',sku:i.sku||'—',color:i.color||'—',price:i.price||0,shipped:i.quantity||0,received:'',status:'已出貨',note:p.notes||'',createdBy:currentUser.username};await api('addShipment',{row});}
+  const matchedVendor = fuzzyMatchVendor(p.vendor||'') || p.vendor || '未知';
+  for(const i of(p.items||[])){const row={date:p.date||todayStr(),vendorName:matchedVendor,sku:i.sku||'—',color:i.color||'—',price:i.price||0,shipped:i.quantity||0,received:'',status:'已出貨',note:p.notes||'',paymentStatus:'',paymentDate:'',createdBy:currentUser.username};await api('addShipment',{row});}
   toast('已匯入並儲存至 Google Sheets ✓');
   document.getElementById('upload-result').innerHTML='';
   go('shipments');await loadAll();
@@ -831,6 +860,277 @@ function updateVendorSelects(){
 }
 function closeOv(id){document.getElementById(id).classList.remove('open');}
 document.querySelectorAll('.overlay').forEach(el=>el.addEventListener('click',e=>{if(e.target===el)el.classList.remove('open');}));
+
+// ══ VENDOR FUZZY MATCH ════════════════════════════════════════════════════════
+function fuzzyMatchVendor(input) {
+  if (!input) return '';
+  const inp = input.trim();
+  // exact match first
+  const exact = DB.vendors.find(v => v.name === inp);
+  if (exact) return exact.name;
+  // partial: vendor name contains input or input contains vendor name
+  const partial = DB.vendors.find(v =>
+    v.name.includes(inp) || inp.includes(v.name) ||
+    inp.replace(/[^一-鿿]/g,'').includes(v.name.replace(/[^一-鿿]/g,'')) ||
+    v.name.replace(/[^一-鿿]/g,'').split('').some(ch => inp.includes(ch) && ch.length > 0)
+  );
+  if (partial) return partial.name;
+  // character overlap scoring
+  let best = null, bestScore = 0;
+  DB.vendors.forEach(v => {
+    const vChars = v.name.split('');
+    const score = vChars.filter(ch => inp.includes(ch)).length / vChars.length;
+    if (score > bestScore && score >= 0.5) { bestScore = score; best = v.name; }
+  });
+  return best || inp;
+}
+
+// ══ PARSE PO QUICK TEXT ═══════════════════════════════════════════════════════
+// Input: "4/10 新秀 8728黑50咖啡35白50 8874紅30白20"
+// Handles: date, vendor, multiple SKUs with colors+quantities
+function parsePoQuickText(text) {
+  const result = { date: todayStr(), vendor: '', items: [], raw: text };
+  if (!text.trim()) return result;
+
+  // Extract date: 4/10 or 4-10
+  const dateM = text.match(/(\d{1,2})[\/\-](\d{1,2})/);
+  if (dateM) {
+    const y = new Date().getFullYear();
+    result.date = `${y}-${String(dateM[1]).padStart(2,'0')}-${String(dateM[2]).padStart(2,'0')}`;
+    text = text.replace(dateM[0], '').trim();
+  }
+
+  // Color keywords map
+  const COLORS = ['黑','白','咖啡','咖','紅','藍','粉','綠','黃','灰','橘','紫','米','銀','棕','橙','卡其','藏青','深藍','淺藍','深灰','淺灰','深咖','淺咖','杏'];
+
+  // Split by Chinese comma, comma, or space-separated SKU groups
+  // A SKU group starts with digits (the SKU number)
+  // Strategy: split text into tokens, find vendor (non-digit text before first SKU), then parse SKU groups
+  const tokens = text.split(/[，、,;\s]+/).filter(Boolean);
+
+  // Find vendor: tokens before the first one that starts with digits
+  const vendorTokens = [];
+  let firstSkuIdx = -1;
+  for (let i = 0; i < tokens.length; i++) {
+    if (/^\d/.test(tokens[i])) { firstSkuIdx = i; break; }
+    vendorTokens.push(tokens[i]);
+  }
+  if (vendorTokens.length > 0) {
+    result.vendor = fuzzyMatchVendor(vendorTokens.join(''));
+  }
+
+  // Now parse from firstSkuIdx onwards
+  // Re-join and parse: find all patterns like "digits + (color+digits)+"
+  const skuText = firstSkuIdx >= 0 ? tokens.slice(firstSkuIdx).join(' ') : '';
+
+  // Split into SKU groups by digit sequences
+  // Each group: SKU (digits) followed by color-qty pairs
+  const skuGroups = skuText.split(/(?=\d{3,})/).filter(Boolean);
+
+  skuGroups.forEach(group => {
+    group = group.trim();
+    if (!group) return;
+    // Extract SKU (leading digits)
+    const skuM = group.match(/^(\d+)/);
+    if (!skuM) return;
+    const sku = skuM[1];
+    let rest = group.slice(skuM[0].length);
+
+    // Build regex from color list (longest first to avoid partial matches)
+    const colorPattern = COLORS.slice().sort((a,b) => b.length - a.length).join('|');
+    const pairRe = new RegExp(`(${colorPattern})(\d+)`, 'g');
+    let m;
+    while ((m = pairRe.exec(rest)) !== null) {
+      result.items.push({ sku, color: m[1], qty: Number(m[2]), price: 0 });
+    }
+  });
+
+  return result;
+}
+
+function parsePoText() {
+  const text = document.getElementById('pm-quicktext').value.trim();
+  if (!text) { toast('請先輸入採購內容', true); return; }
+  const parsed = parsePoQuickText(text);
+  const resultEl = document.getElementById('pm-parse-result');
+
+  if (!parsed.items.length) {
+    resultEl.innerHTML = '<span style="color:var(--accent)">無法解析，請確認格式正確</span>';
+    return;
+  }
+
+  // Fill vendor
+  const vendorSel = document.getElementById('pm-vendor');
+  if (parsed.vendor) {
+    for (let opt of vendorSel.options) {
+      if (opt.value === parsed.vendor) { opt.selected = true; break; }
+    }
+  }
+  // Fill date
+  document.getElementById('pm-date').value = parsed.date;
+
+  // Fill items
+  piCount = 0;
+  document.getElementById('po-items-wrap').innerHTML = '';
+  parsed.items.forEach((item, i) => {
+    const w = document.getElementById('po-items-wrap');
+    const d = document.createElement('div');
+    d.innerHTML = makePoRow(piCount++);
+    w.appendChild(d.firstChild);
+    const idx = piCount - 1;
+    setTimeout(() => {
+      const skuEl = document.getElementById('pi-sku-'+idx);
+      const colorEl = document.getElementById('pi-color-'+idx);
+      const qtyEl = document.getElementById('pi-qty-'+idx);
+      if (skuEl) skuEl.value = item.sku;
+      if (colorEl) colorEl.value = item.color;
+      if (qtyEl) qtyEl.value = item.qty;
+    }, 0);
+  });
+
+  resultEl.innerHTML = `<span style="color:var(--success)">✓ 解析成功：廠商「${parsed.vendor||'未識別'}」，${parsed.items.length} 個品項，請確認後儲存</span>`;
+}
+
+// ══ PARSE ARRIVAL TEXT ════════════════════════════════════════════════════════
+// Input: "4/12到貨 123黑10白10銀5、8874黑10白10"
+function parseArrivalText() {
+  const text = document.getElementById('arrival-text').value.trim();
+  const resultEl = document.getElementById('arrival-result');
+  if (!text) { toast('請輸入到貨資訊', true); return; }
+
+  const COLORS = ['黑','白','咖啡','咖','紅','藍','粉','綠','黃','灰','橘','紫','米','銀','棕','橙','卡其','藏青','深藍','淺藍','深灰','淺灰','深咖','淺咖','杏'];
+
+  // Extract date
+  let arrDate = todayStr();
+  const dateM = text.match(/(\d{1,2})[\/\-](\d{1,2})/);
+  if (dateM) {
+    const y = new Date().getFullYear();
+    arrDate = `${y}-${String(dateM[1]).padStart(2,'0')}-${String(dateM[2]).padStart(2,'0')}`;
+  }
+
+  // Remove "到貨" and date from text, then parse SKUs
+  let skuText = text.replace(/\d{1,2}[\/\-]\d{1,2}/,'').replace(/到貨/g,'').trim();
+  const skuGroups = skuText.split(/[，、,;\s]+(?=\d)/).filter(Boolean);
+
+  const colorPattern = COLORS.slice().sort((a,b)=>b.length-a.length).join('|');
+  const pairRe = new RegExp(`(${colorPattern})(\d+)`, 'g');
+
+  const updates = [];
+  const warnings = [];
+  const notFound = [];
+
+  skuGroups.forEach(group => {
+    group = group.trim();
+    const skuM = group.match(/^(\d+)/);
+    if (!skuM) return;
+    const sku = skuM[1];
+
+    // Find matching shipment(s) by SKU
+    const matches = DB.shipments.filter(s => s.sku === sku && (!s.received || s.received === ''));
+    if (!matches.length) {
+      // Check if SKU exists at all
+      const existing = DB.shipments.filter(s => s.sku === sku);
+      if (existing.length) {
+        notFound.push(`${sku}（已有到貨記錄）`);
+      } else {
+        notFound.push(`${sku}（找不到對應出貨記錄）`);
+      }
+      return;
+    }
+
+    // Check for duplicate vendors
+    const vendors = [...new Set(matches.map(s => s.vendorName))];
+    if (vendors.length > 1) {
+      warnings.push(`款號 ${sku} 有多個廠商（${vendors.join('、')}），請手動確認`);
+    }
+
+    // Parse color-qty pairs
+    let rest = group.slice(skuM[0].length);
+    pairRe.lastIndex = 0;
+    let m;
+    while ((m = pairRe.exec(rest)) !== null) {
+      const color = m[1];
+      const qty = Number(m[2]);
+      // Find the specific shipment row
+      const shipRow = matches.find(s => s.color === color || s.color.startsWith(color) || color.startsWith(s.color));
+      if (shipRow) {
+        updates.push({ id: shipRow.id, sku, color, qty, vendorName: shipRow.vendorName, shipped: shipRow.shipped });
+      } else {
+        // Use first match if color not found
+        updates.push({ id: matches[0].id, sku, color, qty, vendorName: matches[0].vendorName, shipped: matches[0].shipped });
+      }
+    }
+  });
+
+  if (!updates.length && !notFound.length) {
+    resultEl.innerHTML = '<span style="color:var(--accent)">無法解析，請確認格式</span>';
+    return;
+  }
+
+  // Show preview
+  let html = `<div style="background:var(--surface2);border-radius:8px;padding:12px 14px">
+    <div style="font-size:12.5px;font-weight:600;margin-bottom:10px">解析結果，確認後點「確認更新」：</div>`;
+
+  updates.forEach(u => {
+    const diff = u.qty - Number(u.shipped);
+    const statusColor = diff < 0 ? 'var(--accent)' : diff === 0 ? 'var(--success)' : 'var(--warn)';
+    const statusText = diff < 0 ? `短缺${Math.abs(diff)}件` : diff === 0 ? '數量吻合' : `多收${diff}件`;
+    html += `<div style="display:flex;align-items:center;gap:10px;padding:6px 0;border-bottom:1px solid var(--border);font-size:12.5px">
+      <span class="mono" style="font-weight:600">${u.sku}</span>
+      <span>${cdot(u.color)}${u.color}</span>
+      <span style="color:var(--ink3)">${u.vendorName}</span>
+      <span>到貨 <strong>${u.qty}</strong> 件（發貨${u.shipped}）</span>
+      <span style="color:${statusColor}">${statusText}</span>
+    </div>`;
+  });
+
+  if (warnings.length) html += `<div style="margin-top:8px;font-size:12px;color:var(--warn)">${warnings.map(w=>'⚠ '+w).join('<br>')}</div>`;
+  if (notFound.length) html += `<div style="margin-top:8px;font-size:12px;color:var(--accent)">${notFound.map(w=>'✕ '+w).join('<br>')}</div>`;
+
+  html += `<div style="margin-top:12px;display:flex;gap:8px">
+    <button class="btn btn-success btn-sm" onclick="confirmArrivalBatch(${JSON.stringify(JSON.stringify({updates,date:arrDate}))})">確認更新到貨</button>
+    <button class="btn btn-ghost btn-sm" onclick="document.getElementById('arrival-result').innerHTML=''">取消</button>
+  </div></div>`;
+
+  resultEl.innerHTML = html;
+}
+
+async function confirmArrivalBatch(jsonStr) {
+  const {updates, date} = JSON.parse(jsonStr);
+  let done = 0;
+  for (const u of updates) {
+    const status = u.qty >= Number(u.shipped) ? '已到貨' : '數量短缺';
+    try {
+      await api('updateShipment', { id: u.id, updates: { received: String(u.qty), status } });
+      done++;
+    } catch(e) {}
+  }
+  toast(`✓ 已更新 ${done} 筆到貨記錄`);
+  document.getElementById('arrival-text').value = '';
+  document.getElementById('arrival-result').innerHTML = '';
+  await loadAll();
+}
+
+// ══ PAYMENT STATUS ════════════════════════════════════════════════════════════
+function isNonMonthlyVendor(vendorName) {
+  const v = DB.vendors.find(x => x.name === vendorName);
+  if (!v) return false;
+  return !v.terms.includes('月結');
+}
+
+function checkPaymentField() {
+  const vendor = document.getElementById('sm-vendor').value;
+  const row = document.getElementById('sm-payment-row');
+  if (row) row.style.display = isNonMonthlyVendor(vendor) ? 'block' : 'none';
+}
+
+async function togglePayment(id, newStatus) {
+  try {
+    await api('updateShipment', { id, updates: { paymentStatus: newStatus, paymentDate: newStatus==='paid'?todayStr():'' } });
+    toast(newStatus==='paid'?'已標記付款 ✓':'已標記未付款');
+    await loadAll();
+  } catch(e) {}
+}
 function exportCSV(){
   const rows=[['日期','廠商','款號','顏色','發貨','到貨','狀態']];
   DB.shipments.forEach(s=>rows.push([s.date,s.vendorName,s.sku,s.color,s.shipped,s.received||'',s.status]));
