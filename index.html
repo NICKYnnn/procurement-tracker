@@ -845,10 +845,54 @@ async function handleUpload(input){
 }
 async function importResult(json){
   const p=JSON.parse(json);
-  const matchedVendor = fuzzyMatchVendor(p.vendor||'') || p.vendor || '未知';
-  for(const i of(p.items||[])){const row={date:p.date||todayStr(),vendorName:matchedVendor,sku:i.sku||'—',color:i.color||'—',price:i.price||0,shipped:i.quantity||0,received:'',status:'已出貨',note:p.notes||'',paymentStatus:'',paymentDate:'',createdBy:currentUser.username};await api('addShipment',{row});}
+  const matchedVendor=fuzzyMatchVendor(p.vendor||'')||p.vendor||'未知';
+  const matchSummary=[];
+
+  for(const i of(p.items||[])){
+    const row={date:p.date||todayStr(),vendorName:matchedVendor,sku:i.sku||'—',color:i.color||'—',price:i.price||0,shipped:i.quantity||0,received:'',status:'已出貨',note:p.notes||'',paymentStatus:'',paymentDate:'',createdBy:currentUser.username};
+    await api('addShipment',{row});
+
+    // Match to PO
+    try{
+      const poRes=await api('getPOBySkuColor',{sku:i.sku,color:i.color,vendorName:matchedVendor});
+      if(poRes.results&&poRes.results.length){
+        const po=poRes.results[0];
+        const remaining=po.remaining-Number(i.quantity||0);
+        matchSummary.push({sku:i.sku,color:i.color,ordered:po.ordered,thisShip:Number(i.quantity||0),alreadyShipped:po.alreadyShipped,remaining,poId:po.poId});
+        // Update PO status
+        if(remaining<=0){
+          await api('updatePO',{id:po.poId,updates:{status:'done'}});
+        } else {
+          await api('updatePO',{id:po.poId,updates:{status:'partial'}});
+        }
+      }
+    }catch(e){}
+  }
+
+  // Show match summary
+  if(matchSummary.length){
+    let html=`<div style="margin:14px;background:var(--surface2);border-radius:9px;padding:14px">
+      <div style="font-size:12.5px;font-weight:600;margin-bottom:10px">採購單匹配結果：</div>`;
+    matchSummary.forEach(m=>{
+      const done=m.remaining<=0;
+      const color=done?'var(--success)':m.remaining>0?'var(--warn)':'var(--accent)';
+      html+=`<div style="padding:7px 0;border-bottom:1px solid var(--border);font-size:12.5px;display:flex;gap:10px;align-items:center">
+        <span class="mono" style="font-weight:600">${m.sku}</span>
+        <span>${cdot(m.color)}${m.color}</span>
+        <span style="color:var(--ink3)">採購${m.ordered}件</span>
+        <span>本次出貨${m.thisShip}件</span>
+        <span style="color:${color};font-weight:600">${done?'✓ 完成':m.remaining>0?`待補${m.remaining}件`:`多出${Math.abs(m.remaining)}件`}</span>
+        <span style="color:var(--ink3);font-size:11px">${m.poId}</span>
+      </div>`;
+    });
+    html+=`</div>`;
+    document.getElementById('upload-result').innerHTML=html;
+    setTimeout(()=>{document.getElementById('upload-result').innerHTML='';},8000);
+  } else {
+    document.getElementById('upload-result').innerHTML='';
+  }
+
   toast('已匯入並儲存至 Google Sheets ✓');
-  document.getElementById('upload-result').innerHTML='';
   go('shipments');await loadAll();
 }
 
@@ -1109,6 +1153,19 @@ async function confirmArrivalBatch(jsonStr) {
     try {
       await api('updateShipment', { id: u.id, updates: { received: String(u.qty), status } });
       done++;
+      // Match to PO and update status
+      try {
+        const poRes = await api('getPOBySkuColor', { sku: u.sku, color: u.color, vendorName: u.vendorName });
+        if (poRes.results && poRes.results.length) {
+          const po = poRes.results[0];
+          const remaining = po.remaining - u.qty;
+          if (remaining <= 0) {
+            await api('updatePO', { id: po.poId, updates: { status: 'done' } });
+          } else {
+            await api('updatePO', { id: po.poId, updates: { status: 'partial' } });
+          }
+        }
+      } catch(e) {}
     } catch(e) {}
   }
   toast(`✓ 已更新 ${done} 筆到貨記錄`);
