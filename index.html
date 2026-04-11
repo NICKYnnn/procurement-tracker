@@ -480,6 +480,10 @@ input,select,textarea{font-family:var(--font);color:var(--ink)}
     <div class="form-grid g2"><div class="form-row"><label>發貨數量</label><input type="number" id="esm-shipped"></div><div class="form-row"><label>到貨數量</label><input type="number" id="esm-received" placeholder="留空=尚未到貨"></div></div>
     <div class="form-grid g2"><div class="form-row"><label>狀態</label><select id="esm-status"><option>待出貨</option><option>已出貨</option><option>已到貨</option><option>數量短缺</option></select></div><div class="form-row"><label>物流方式</label><select id="esm-logistics"><option value="">未指定</option><option>海運</option><option>空運</option><option>海快</option><option>其他</option></select></div></div>
     <div class="form-grid g2"><div class="form-row"><label>物流單號</label><input type="text" id="esm-tracking"></div><div class="form-row"><label>備註</label><input type="text" id="esm-note"></div></div>
+    <div class="form-row" id="esm-payment-row" style="display:none">
+      <label>付款狀態</label>
+      <select id="esm-payment"><option value="">未設定</option><option value="unpaid">未付款</option><option value="paid">已付款</option></select>
+    </div>
     <div class="modal-footer"><button class="btn btn-ghost" onclick="closeOv('edit-ship-modal')">取消</button><button class="btn btn-primary" onclick="saveEditShipment()">儲存</button></div>
   </div>
 </div>
@@ -1231,7 +1235,9 @@ async function deleteShipment(id) {
 function editShipment(id) {
   const s = DB.shipments.find(x => x.id === id);
   if (!s) return;
-  updateVendorSelects();
+  // Populate vendor selects for edit modal
+  const esmVSel = document.getElementById('esm-vendor');
+  esmVSel.innerHTML = DB.vendors.map(v=>`<option value="${v.name}">${v.name}</option>`).join('');
   document.getElementById('esm-id').value = id;
   document.getElementById('esm-date').value = s.date || '';
   document.getElementById('esm-sku').value = s.sku || '';
@@ -1242,15 +1248,18 @@ function editShipment(id) {
   document.getElementById('esm-note').value = s.note || '';
   document.getElementById('esm-logistics').value = s.logistics || '';
   document.getElementById('esm-tracking').value = s.tracking || '';
+  document.getElementById('esm-payment').value = s.paymentStatus || '';
   // Set vendor
-  const vendorSel = document.getElementById('esm-vendor');
-  for (let opt of vendorSel.options) { if (opt.value === s.vendorName) { opt.selected = true; break; } }
+  for (let opt of esmVSel.options) { if (opt.value === s.vendorName) { opt.selected = true; break; } }
   // Set status
   const statusSel = document.getElementById('esm-status');
   for (let opt of statusSel.options) { if (opt.value === s.status) { opt.selected = true; break; } }
   // Show/hide price for helper
   const cfg = ROLE_CFG[currentUser.role];
   document.getElementById('esm-price-row').style.display = cfg.showPrice ? '' : 'none';
+  // Show payment for non-monthly vendors
+  const payRow = document.getElementById('esm-payment-row');
+  if (payRow) payRow.style.display = isNonMonthlyVendor(s.vendorName) ? 'block' : 'none';
   document.getElementById('edit-ship-modal').classList.add('open');
 }
 
@@ -1268,6 +1277,7 @@ async function saveEditShipment() {
     note: document.getElementById('esm-note').value,
     logistics: document.getElementById('esm-logistics').value,
     tracking: document.getElementById('esm-tracking').value,
+    paymentStatus: document.getElementById('esm-payment').value || '',
   };
   try {
     await api('updateShipment', { id, updates });
