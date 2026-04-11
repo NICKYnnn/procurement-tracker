@@ -636,6 +636,7 @@ function todayStr(){return today.toISOString().slice(0,10);}
 function parseD(s){if(!s)return null;const d=new Date(s);d.setHours(0,0,0,0);return d;}
 function diffD(s){const d=parseD(s);if(!d)return null;return Math.floor((d-today)/864e5);}
 function fmtD(s){if(!s)return '—';const d=parseD(s);return `${d.getMonth()+1}/${d.getDate()}`;}
+function fmtDate(s){if(!s)return '—';const d=new Date(s);if(isNaN(d))return s;return `${d.getFullYear()}/${d.getMonth()+1}/${d.getDate()}`;}
 function cdot(c){return `<span class="cdot" style="background:${CMAP[c]||'#aaa'}"></span>`;}
 function bdg(t,c){return `<span class="badge ${c}">${t}</span>`;}
 function progBar(pct){const c=pct>=100?'pf-ok':pct>=80?'pf-warn':'pf-danger';return `<div style="display:flex;align-items:center;gap:6px"><div class="prog-wrap"><div class="prog-fill ${c}" style="width:${Math.min(pct,100)}%"></div></div><span style="font-size:10.5px;font-family:var(--mono)">${Math.round(pct)}%</span></div>`;}
@@ -671,8 +672,8 @@ function renderDash(){
      <div class="stat-card"><div class="lbl">即將到期</div><div class="val" style="color:var(--warn)">${dueSoon.length}</div><div class="hint">近期提醒</div></div>
      <div class="stat-card"><div class="lbl">數量短缺</div><div class="val" style="color:var(--warn)">${shortage.length}</div><div class="hint">需確認</div></div>`;
   let alerts='';
-  overdue.forEach(p=>{const d=Math.abs(diffD(p.promiseDate));alerts+=`<div class="alert-banner alert-danger"><div class="alert-body"><strong>【逾期${d}天】${p.vendorName}</strong> — ${p.id} 承諾出貨日已過（${fmtD(p.promiseDate)}）<div style="margin-top:6px"><button class="btn btn-xs" style="background:#b52a1a;color:#fff;border:none" onclick="openPromiseModal('${p.id}')">更新承諾日</button><button class="btn btn-xs btn-ghost" style="margin-left:4px" onclick="markDone('${p.id}')">確認到貨</button></div></div></div>`;});
-  dueSoon.forEach(p=>{const d=diffD(p.promiseDate);alerts+=`<div class="alert-banner alert-warn"><div class="alert-body"><strong>【提醒】${p.vendorName}</strong> — ${p.id} 承諾日剩${d===0?'今天':''+d+'天'}（${fmtD(p.promiseDate)}）<div style="margin-top:6px"><button class="btn btn-xs" style="background:var(--warn);color:#fff;border:none" onclick="openPromiseModal('${p.id}')">更新</button><button class="btn btn-xs btn-ghost" style="margin-left:4px" onclick="markDone('${p.id}')">確認到貨</button></div></div></div>`;});
+  overdue.forEach(p=>{const d=Math.abs(diffD(p.promiseDate));alerts+=`<div class="alert-banner alert-danger"><div class="alert-body"><strong>【逾期${d}天】${p.vendorName}</strong> — ${p.id} 承諾出貨日已過（${fmtD(p.promiseDate)}）<div style="margin-top:6px"><button class="btn btn-xs" style="background:#b52a1a;color:#fff;border:none" onclick="openPromiseModal('${p.id}')">更新承諾日</button><button class="btn btn-xs btn-ghost" style="margin-left:4px" onclick="markDone('${p.id}')">確認出貨</button></div></div></div>`;});
+  dueSoon.forEach(p=>{const d=diffD(p.promiseDate);alerts+=`<div class="alert-banner alert-warn"><div class="alert-body"><strong>【提醒】${p.vendorName}</strong> — ${p.id} 承諾日剩${d===0?'今天':''+d+'天'}（${fmtD(p.promiseDate)}）<div style="margin-top:6px"><button class="btn btn-xs" style="background:var(--warn);color:#fff;border:none" onclick="openPromiseModal('${p.id}')">更新</button><button class="btn btn-xs btn-ghost" style="margin-left:4px" onclick="markDone('${p.id}')">確認出貨</button></div></div></div>`;});
   document.getElementById('alert-area').innerHTML=alerts;
   let rem='';
   if(!overdue.length&&!dueSoon.length&&!shortage.length){rem='<div style="padding:18px;text-align:center;color:var(--ink3);font-size:13px">✓ 目前沒有待處理事項</div>';}
@@ -695,10 +696,10 @@ function renderPO(){
     const totalQty=items.reduce((a,i)=>a+Number(i.qty||0),0);
     const totalAmt=items.reduce((a,i)=>a+Number(i.qty||0)*Number(i.price||0),0);
     const promiseLine=po.promiseDate?`<span style="${st==='overdue'?'color:var(--accent);font-weight:600':d!==null&&d<=Number(po.remindDays||2)?'color:var(--warn);font-weight:600':'color:var(--ink3)'}">📅 ${fmtD(po.promiseDate)}${d<0?' (逾期'+Math.abs(d)+'天)':d===0?' (今天)':d!==null&&d<=Number(po.remindDays||2)?' ('+d+'天後)':''}</span>`:'';
-    return `<div class="po-card"><div class="po-card-hd"><div style="flex:1"><div class="po-num">${po.id} · ${po.date}</div><div class="po-vendor">${po.vendorName}</div></div>${poStBdg(po)}</div>
+    return `<div class="po-card"><div class="po-card-hd"><div style="flex:1"><div class="po-num">${po.id} · ${fmtDate(po.date)}</div><div class="po-vendor">${po.vendorName}</div></div>${poStBdg(po)}</div>
       <div class="po-card-body"><span>📦 ${totalQty}件</span>${cfg.showPrice?`<span>💰 $${totalAmt.toLocaleString()}</span>`:''} ${promiseLine}${po.note?`<span style="color:var(--ink3)">📝${po.note}</span>`:''}</div>
       <div class="po-items-wrap">${items.map(i=>`<div class="po-item-row"><span class="sku">${i.sku}</span>${cdot(i.color)}<span>${i.color}</span><span style="color:var(--ink3)">×${i.qty}</span>${cfg.showPrice?`<span style="color:var(--ink2)">@$${i.price}=$${(Number(i.qty)*Number(i.price)).toLocaleString()}</span>`:''}</div>`).join('')}</div>
-      <div class="po-actions">${st!=='done'?`<button class="btn btn-ghost btn-sm" onclick="openPromiseModal('${po.id}')">更新承諾日</button><button class="btn btn-success btn-sm" onclick="markDone('${po.id}')">確認到貨</button>`:bdg('已完成','b-ok')}${st==='overdue'?`<button class="btn btn-primary btn-sm">🚨 追廠商</button>`:''}<button class="btn btn-ghost btn-sm" onclick="editPO('${po.id}')">編輯</button><button class="btn btn-xs" style="background:#fdecea;color:#b52a1a;border:none;padding:5px 10px;border-radius:7px" onclick="deletePO('${po.id}')">刪除</button></div></div>`;
+      <div class="po-actions">${st!=='done'?`<button class="btn btn-ghost btn-sm" onclick="openPromiseModal('${po.id}')">更新承諾日</button><button class="btn btn-success btn-sm" onclick="markDone('${po.id}')">確認出貨</button>`:bdg('已完成','b-ok')}${st==='overdue'?`<button class="btn btn-primary btn-sm">🚨 追廠商</button>`:''}<button class="btn btn-ghost btn-sm" onclick="editPO('${po.id}')">編輯</button><button class="btn btn-xs" style="background:#fdecea;color:#b52a1a;border:none;padding:5px 10px;border-radius:7px" onclick="deletePO('${po.id}')">刪除</button></div></div>`;
   }).join('');
 }
 
