@@ -775,7 +775,7 @@ async function testGemini(){
   if(!key){statusEl.innerHTML='<span style="color:var(--accent)">請先設定 API Key</span>';return;}
   statusEl.innerHTML='<span style="color:var(--warn)">測試中...</span>';
   try{
-    const res=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite-preview-06-17:generateContent?key=${key}`,{
+    const res=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${key}`,{
       method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({contents:[{parts:[{text:'回覆OK'}]}]})
     });
@@ -799,7 +799,7 @@ async function handleUpload(input){
   div.innerHTML=`<div style="text-align:center;padding:20px;color:var(--ink3)"><div class="ai-spin"></div>AI辨識中...</div>`;
   const b64=await new Promise((res,rej)=>{const r=new FileReader();r.onload=()=>res(r.result.split(',')[1]);r.onerror=rej;r.readAsDataURL(file);});
   try{
-    const res=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite-preview-06-17:generateContent?key=${key}`,{
+    const res=await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash-lite:generateContent?key=${key}`,{
       method:'POST',headers:{'Content-Type':'application/json'},
       body:JSON.stringify({contents:[{parts:[
         {inline_data:{mime_type:file.type||'image/jpeg',data:b64}},
