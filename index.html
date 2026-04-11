@@ -513,11 +513,12 @@ async function doLogin(role){
     const res=await api('login',{username:user,password:pass});
     if(!res.success){loading.style.display='none';document.getElementById(role+'-form').style.display='block';errEl.style.display='block';return;}
     currentUser=res.user;loading.style.display='none';
+    localStorage.setItem('savedUser', JSON.stringify(res.user));
     document.getElementById('login-screen').classList.add('hidden');
     initApp();
   }catch(e){loading.style.display='none';document.getElementById(role+'-form').style.display='block';errEl.textContent='連線失敗，請稍後再試';errEl.style.display='block';}
 }
-function logout(){currentUser=null;DB={pos:[],shipments:[],vendors:[],inventory:[]};document.getElementById('login-screen').classList.remove('hidden');['admin-pass','helper-pass'].forEach(id=>document.getElementById(id).value='');backToRoles();}
+function logout(){currentUser=null;localStorage.removeItem('savedUser');DB={pos:[],shipments:[],vendors:[],inventory:[]};document.getElementById('login-screen').classList.remove('hidden');['admin-pass','helper-pass'].forEach(id=>document.getElementById(id).value='');backToRoles();}
 
 function initApp(){
   const u=currentUser,cfg=ROLE_CFG[u.role]||ROLE_CFG.helper;
@@ -1141,6 +1142,20 @@ function exportCSV(){
   DB.shipments.forEach(s=>rows.push([s.date,s.vendorName,s.sku,s.color,s.shipped,s.received||'',s.status]));
   const a=document.createElement('a');a.href=URL.createObjectURL(new Blob(['\uFEFF'+rows.map(r=>r.map(v=>`"${v}"`).join(',')).join('\n')],{type:'text/csv'}));a.download='出貨記錄.csv';a.click();
 }
+
+// ── Auto-login on page load ──────────────────────────────────────────────────
+(function(){
+  const saved = localStorage.getItem('savedUser');
+  if(saved){
+    try{
+      currentUser = JSON.parse(saved);
+      document.getElementById('login-screen').classList.add('hidden');
+      initApp();
+    }catch(e){
+      localStorage.removeItem('savedUser');
+    }
+  }
+})();
 </script>
 </body>
 </html>
