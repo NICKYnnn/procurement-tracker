@@ -757,17 +757,92 @@ async function fixEmptyVendors() {
 
 function renderShipments(){
   const cfg=ROLE_CFG[currentUser.role];
-  // Auto-fix empty vendors on first render
-  if (DB.shipments.some(s => !s.vendorName)) fixEmptyVendors();
+  if(DB.shipments.some(s=>!s.vendorName)) fixEmptyVendors();
   const vf=document.getElementById('ship-vf').value;
-  const rows=DB.shipments.filter(s=>!vf||s.vendorName===vf);
-  document.getElementById('ship-tbody').innerHTML=rows.map(s=>{const amt=Number(s.price||0)*Number(s.received||s.shipped||0);const trackHtml=s.tracking?`<a href="https://www.google.com/search?q=${encodeURIComponent((s.logistics||'')+' '+s.tracking)}" target="_blank" style="font-family:var(--mono);font-size:11px;color:var(--info);text-decoration:none">${s.tracking}</a>`:'—';const paymentBadge = isNonMonthlyVendor(s.vendorName) ? (s.paymentStatus==='paid'?`<button class="badge b-ok" style="cursor:pointer;border:none" onclick="togglePayment('${s.id}','unpaid')">已付款</button>`:`<button class="badge b-danger" style="cursor:pointer;border:none" onclick="togglePayment('${s.id}','paid')">未付款</button>`) : '';
-    return `<tr><td style="color:var(--ink3);font-size:11.5px">${s.date}</td><td>${s.vendorName}</td><td class="mono">${s.sku}</td><td>${cdot(s.color)}${s.color}</td>${cfg.showPrice?`<td class="mono">$${Number(s.price||0)}</td>`:''}<td class="mono">${s.shipped}</td><td class="mono">${s.received||'—'}</td>${cfg.showPrice?`<td class="mono" style="font-weight:600">$${amt.toLocaleString()}</td>`:''}<td style="font-size:12px;color:var(--ink2)">${s.logistics||'—'}</td><td>${trackHtml}</td><td>${shipBdg(s.status)}</td>${paymentBadge?`<td>${paymentBadge}</td>`:'<td></td>'}<td style="white-space:nowrap"><button class="btn btn-ghost btn-xs" onclick="editShipment('${s.id}')">編輯</button> <button class="btn btn-xs" style="background:#fdecea;color:#b52a1a;border:none" onclick="deleteShipment('${s.id}')">刪除</button></td></tr>`}).join('')||'<tr><td colspan="9" style="padding:20px;text-align:center;color:var(--ink3)">暫無記錄</td></tr>';
+  const filtered=DB.shipments.filter(s=>!vf||s.vendorName===vf);
+
+  // Group by batchId (fallback: group by vendorName+date+logistics)
+  const batches=new Map();
+  filtered.forEach(s=>{
+    const key=s.batchId||(s.vendorName+'|'+s.date+'|'+(s.logistics||'')+'|'+(s.tracking||''));
+    if(!batches.has(key)) batches.set(key,[]);
+    batches.get(key).push(s);
+  });
+
+  if(!batches.size){
+    document.getElementById('ship-tbody').innerHTML='<tr><td colspan="99" style="padding:20px;text-align:center;color:var(--ink3)">暫無記錄</td></tr>';
+    return;
+  }
+
+  // Render as cards instead of table rows
+  const container=document.getElementById('ship-tbody');
+  // Switch to card layout - replace table with div
+  const tableEl=container.closest('table');
+  const tableParent=tableEl.parentElement;
+
+  let html='<div style="padding:0">';
+  [...batches.entries()].sort((a,b)=>{
+    const da=a[1][0]?.date||''; const db=b[1][0]?.date||'';
+    return db.localeCompare(da);
+  }).forEach(([key,items])=>{
+    const first=items[0];
+    const vendor=first.vendorName||'—';
+    const date=first.date||'—';
+    const logistics=first.logistics||'';
+    const tracking=first.tracking||'';
+    const totalShipped=items.reduce((a,s)=>a+Number(s.shipped||0),0);
+    const totalAmt=cfg.showPrice?items.reduce((a,s)=>a+Number(s.price||0)*Number(s.received||s.shipped||0),0):0;
+    const allStatuses=[...new Set(items.map(s=>s.status))];
+    const hasShortage=allStatuses.includes('數量短缺');
+    const allArrived=items.every(s=>s.received&&Number(s.received)>=Number(s.shipped));
+    const overallStatus=hasShortage?'數量短缺':allArrived?'已到貨':allStatuses.includes('已到貨')?'部分到貨':allStatuses[0]||'已出貨';
+    const paymentBadge=isNonMonthlyVendor(vendor)?(first.paymentStatus==='paid'?`<button class="badge b-ok" style="cursor:pointer;border:none" onclick="togglePaymentBatch('${key}','unpaid')">已付款</button>`:`<button class="badge b-danger" style="cursor:pointer;border:none" onclick="togglePaymentBatch('${key}','paid')">未付款</button>`):'';
+
+    const trackHtml=tracking?`<a href="https://www.google.com/search?q=${encodeURIComponent(logistics+' '+tracking)}" target="_blank" style="font-family:var(--mono);font-size:11px;color:var(--info);text-decoration:none">${tracking}</a>`:'—';
+
+    html+=`<div style="background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:10px;overflow:hidden">
+      <div style="padding:11px 16px;display:flex;align-items:center;gap:12px;background:var(--surface2);flex-wrap:wrap">
+        <span style="font-weight:600;font-size:13.5px">${vendor}</span>
+        <span style="font-size:12px;color:var(--ink3);font-family:var(--mono)">${date}</span>
+        ${logistics?`<span style="font-size:12px;color:var(--ink2)">${logistics}</span>`:''}
+        ${tracking?`<span>${trackHtml}</span>`:''}
+        ${cfg.showPrice?`<span style="font-size:12px;color:var(--ink2);font-family:var(--mono)">$${totalAmt.toLocaleString()}</span>`:''}
+        <span style="margin-left:auto;display:flex;align-items:center;gap:8px">
+          ${paymentBadge}
+          ${shipBdg(overallStatus)}
+          <button class="btn btn-ghost btn-xs" onclick="editBatchShipment('${key}')">編輯</button>
+          <button class="btn btn-xs" style="background:#fdecea;color:#b52a1a;border:none" onclick="deleteBatch('${key}')">刪除</button>
+        </span>
+      </div>
+      <table style="width:100%;border-collapse:collapse">
+        <tbody>
+        ${items.map(s=>`<tr style="border-top:1px solid var(--border)">
+          <td style="padding:8px 16px;font-family:var(--mono);font-size:12px;font-weight:600;width:80px">${s.sku}</td>
+          <td style="padding:8px 8px">${cdot(s.color)}${s.color}</td>
+          ${cfg.showPrice?`<td style="padding:8px 8px;font-family:var(--mono);font-size:12px;color:var(--ink3)">$${Number(s.price||0)}</td>`:''}
+          <td style="padding:8px 8px;font-size:12px">發貨 <strong>${s.shipped}</strong></td>
+          <td style="padding:8px 8px;font-size:12px">${s.received?`到貨 <strong style="color:${Number(s.received)<Number(s.shipped)?'var(--accent)':'var(--success)'}">${s.received}</strong>`:'<span style="color:var(--ink3)">待到貨</span>'}</td>
+          <td style="padding:8px 16px">${shipBdg(s.status)}</td>
+          <td style="padding:8px 8px;white-space:nowrap">
+            <button class="btn btn-ghost btn-xs" onclick="editShipment('${s.id}')">編輯</button>
+            <button class="btn btn-xs" style="background:#fdecea;color:#b52a1a;border:none" onclick="deleteShipment('${s.id}')">刪除</button>
+          </td>
+        </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`;
+  });
+  html+='</div>';
+
+  // Replace table with card layout
+  tableParent.innerHTML=html;
 }
-function openShipModal(){updateVendorSelects();document.getElementById('sm-date').value=todayStr();document.getElementById('sm-logistics').value='';document.getElementById('sm-tracking').value='';document.getElementById('sm-payment').value='';document.getElementById('sm-payment-date').value='';document.getElementById('ship-modal').classList.add('open');setTimeout(checkPaymentField,100);}
+
+
 async function saveShipment(){
   const rec=document.getElementById('sm-received').value;
-  const row={date:document.getElementById('sm-date').value,vendorName:document.getElementById('sm-vendor').value,sku:document.getElementById('sm-sku').value||'—',color:document.getElementById('sm-color').value||'—',price:document.getElementById('sm-price').value||0,shipped:document.getElementById('sm-shipped').value||0,received:rec||'',status:document.getElementById('sm-status').value,note:document.getElementById('sm-note').value,logistics:document.getElementById('sm-logistics').value||'',tracking:document.getElementById('sm-tracking').value||'',paymentStatus:document.getElementById('sm-payment').value||'',paymentDate:document.getElementById('sm-payment-date').value||'',createdBy:currentUser.username};
+  const batchId='B-'+Date.now();
+  const row={date:document.getElementById('sm-date').value,vendorName:document.getElementById('sm-vendor').value,sku:document.getElementById('sm-sku').value||'—',color:document.getElementById('sm-color').value||'—',price:document.getElementById('sm-price').value||0,shipped:document.getElementById('sm-shipped').value||0,received:rec||'',status:document.getElementById('sm-status').value,note:document.getElementById('sm-note').value,logistics:document.getElementById('sm-logistics').value||'',tracking:document.getElementById('sm-tracking').value||'',paymentStatus:document.getElementById('sm-payment').value||'',paymentDate:document.getElementById('sm-payment-date').value||'',batchId,createdBy:currentUser.username};
   try{await api('addShipment',{row});toast('出貨記錄已儲存 ✓');closeOv('ship-modal');await loadAll();}catch(e){}
 }
 
@@ -912,10 +987,11 @@ async function handleUpload(input){
 async function importResult(json){
   const p=JSON.parse(json);
   const matchedVendor=fuzzyMatchVendor(p.vendor||'')||p.vendor||'未知';
+  const importBatchId='B-'+Date.now();
   const matchSummary=[];
 
   for(const i of(p.items||[])){
-    const row={date:p.date||todayStr(),vendorName:matchedVendor,sku:i.sku||'—',color:i.color||'—',price:i.price||0,shipped:i.quantity||0,received:'',status:'已出貨',note:p.notes||'',paymentStatus:'',paymentDate:'',createdBy:currentUser.username};
+    const row={date:p.date||todayStr(),vendorName:matchedVendor,sku:i.sku||'—',color:i.color||'—',price:i.price||0,shipped:i.quantity||0,received:'',status:'已出貨',note:p.notes||'',paymentStatus:'',paymentDate:'',batchId:importBatchId,createdBy:currentUser.username};
     await api('addShipment',{row});
 
     // Match to PO
@@ -1421,6 +1497,31 @@ async function saveEditPO() {
     closeOv('edit-po-modal');
     await loadAll();
   } catch(e) {}
+}
+
+async function togglePaymentBatch(batchKey, newStatus) {
+  const items = DB.shipments.filter(s => (s.batchId||s.vendorName+'|'+s.date+'|'+(s.logistics||'')+'|'+(s.tracking||'')) === batchKey);
+  for (const s of items) {
+    try { await api('updateShipment', {id:s.id, updates:{paymentStatus:newStatus, paymentDate:newStatus==='paid'?todayStr():''}}); } catch(e){}
+  }
+  toast(newStatus==='paid'?'已標記付款 ✓':'已標記未付款');
+  await loadAll();
+}
+
+async function deleteBatch(batchKey) {
+  const items = DB.shipments.filter(s => (s.batchId||s.vendorName+'|'+s.date+'|'+(s.logistics||'')+'|'+(s.tracking||'')) === batchKey);
+  if (!confirm(`確定要刪除這張出貨單（共 ${items.length} 筆記錄）？`)) return;
+  for (const s of items) {
+    try { await api('deleteRow', {sheetName:'Shipments', id:s.id}); } catch(e){}
+  }
+  toast('已刪除 ✓');
+  await loadAll();
+}
+
+function editBatchShipment(batchKey) {
+  // Edit the first item in batch for shared fields
+  const items = DB.shipments.filter(s => (s.batchId||s.vendorName+'|'+s.date+'|'+(s.logistics||'')+'|'+(s.tracking||'')) === batchKey);
+  if (items.length) editShipment(items[0].id);
 }
 
 async function togglePayment(id, newStatus) {
