@@ -767,7 +767,47 @@ async function savePO(){
   const row={vendorName:vendor,date:document.getElementById('pm-date').value,promiseDate:document.getElementById('pm-promise').value,remindDays:document.getElementById('pm-remind').value,note:document.getElementById('pm-note').value,status:'pending',items:JSON.stringify(items),createdBy:currentUser.username};
   try{await api('addPO',{row});toast('採購單已儲存至雲端 ✓');closeOv('po-modal');await loadAll();}catch(e){}
 }
-async function markDone(id){try{await api('updatePO',{id,updates:{status:'done'}});toast('已標記完成 ✓');await loadAll();}catch(e){}}
+async function markDone(id) {
+  const po = DB.pos.find(p => p.id === id);
+  if (!po) return;
+
+  try {
+    // 1. Update PO status to done
+    await api('updatePO', { id, updates: { status: 'done' } });
+
+    // 2. Auto-create shipment records from PO items
+    let items = [];
+    try { items = typeof po.items === 'string' ? JSON.parse(po.items) : (po.items || []); } catch(e) {}
+
+    if (items.length) {
+      const batchId = 'B-' + Date.now();
+      for (const item of items) {
+        const row = {
+          date: todayStr(),
+          vendorName: po.vendorName,
+          sku: item.sku,
+          color: item.color,
+          price: item.price || 0,
+          shipped: item.qty,
+          received: '',
+          status: '已出貨',
+          note: '',
+          paymentStatus: '',
+          paymentDate: '',
+          paymentMethod: '',
+          batchId,
+          createdBy: currentUser.username
+        };
+        try { await api('addShipment', { row }); } catch(e) {}
+      }
+      toast(`✓ 已確認出貨，自動建立 ${items.length} 筆出貨記錄`);
+    } else {
+      toast('已標記確認出貨 ✓');
+    }
+
+    await loadAll();
+  } catch(e) { toast('操作失敗', true); }
+}
 function openPromiseModal(id){document.getElementById('prom-id').value=id;document.getElementById('prom-date').value='';document.getElementById('prom-note').value='';document.getElementById('promise-modal').classList.add('open');}
 async function savePromise(){
   const id=document.getElementById('prom-id').value;
