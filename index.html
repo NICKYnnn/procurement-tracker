@@ -827,6 +827,17 @@ function renderShipments(){
         <span style="margin-left:auto;display:flex;align-items:center;gap:8px">
           ${paymentBadge}${first.paymentMethod?`<span style="font-size:11px;color:var(--ink2);background:var(--surface2);padding:2px 7px;border-radius:10px">${first.paymentMethod}</span>`:''}
           ${shipBdg(overallStatus)}
+          ${(()=>{
+            // Check if any item in this batch has shortage vs PO
+            const hasShortage=items.some(s=>{
+              const po=DB.pos.find(p=>{let it=[];try{it=typeof p.items==='string'?JSON.parse(p.items):(p.items||[]);}catch(e){}return p.vendorName===s.vendorName&&it.some(i=>i.sku===s.sku&&i.color===s.color);});
+              if(!po)return false;
+              const it2=typeof po.items==='string'?JSON.parse(po.items):(po.items||[]);
+              const ordered=it2.find(i=>i.sku===s.sku&&i.color===s.color)?.qty||0;
+              return Number(ordered)>Number(s.shipped);
+            });
+            return hasShortage?`<button class="btn btn-xs" style="background:#fff3e0;color:#b06010;border:1px solid #f0c070" onclick="createReplenishPO('${key}')">補貨採購單</button>`:'';
+          })()}
           <button class="btn btn-ghost btn-xs" onclick="editBatchShipment('${key}')">編輯</button>
           <button class="btn btn-xs" style="background:#fdecea;color:#b52a1a;border:none" onclick="deleteBatch('${key}')">刪除</button>
         </span>
@@ -837,7 +848,15 @@ function renderShipments(){
           <td style="padding:8px 16px;font-family:var(--mono);font-size:12px;font-weight:600;width:80px">${s.sku}</td>
           <td style="padding:8px 8px">${cdot(s.color)}${s.color}</td>
           ${cfg.showPrice?`<td style="padding:8px 8px;font-family:var(--mono);font-size:12px;color:var(--ink3)">$${Number(s.price||0)}</td>`:''}
-          <td style="padding:8px 8px;font-size:12px">發貨 <strong>${s.shipped}</strong></td>
+          <td style="padding:8px 8px;font-size:12px">發貨 <strong>${s.shipped}</strong>${(()=>{
+            const po=DB.pos.find(p=>{let items=[];try{items=typeof p.items==='string'?JSON.parse(p.items):(p.items||[]);}catch(e){}return p.vendorName===s.vendorName&&items.some(i=>i.sku===s.sku&&i.color===s.color);});
+            if(!po)return '';
+            const ordered=po.items?(typeof po.items==='string'?JSON.parse(po.items):po.items).find(i=>i.sku===s.sku&&i.color===s.color)?.qty:0;
+            if(!ordered)return '';
+            const diff=Number(ordered)-Number(s.shipped);
+            if(diff<=0)return '<span style="color:var(--success);font-size:11px;margin-left:6px">✓ 出齊</span>';
+            return '<span style="color:var(--warn);font-size:11px;margin-left:6px">本批欠'+diff+'件</span>';
+          })()}</td>
           <td style="padding:8px 8px;font-size:12px">${s.received?`到貨 <strong style="color:${Number(s.received)<Number(s.shipped)?'var(--accent)':'var(--success)'}">${s.received}</strong>`:'<span style="color:var(--ink3)">待到貨</span>'}</td>
           <td style="padding:8px 16px">${shipBdg(s.status)}</td>
           <td style="padding:8px 8px;white-space:nowrap">
@@ -1584,6 +1603,53 @@ async function deleteVendor(id, name) {
     toast('已刪除 ✓');
     await loadAll();
   } catch(e) { toast('刪除失敗', true); }
+}
+
+
+// ══ CREATE REPLENISH PO ═══════════════════════════════════════════════════════
+async function createReplenishPO(batchKey) {
+  const batchItems = DB.shipments.filter(s =>
+    (s.batchId || s.vendorName+'|'+s.date+'|'+(s.logistics||'')+'|'+(s.tracking||'')) === batchKey
+  );
+  if (!batchItems.length) return;
+
+  const shortages = [];
+  batchItems.forEach(s => {
+    const po = DB.pos.find(p => {
+      let items = [];
+      try { items = typeof p.items === 'string' ? JSON.parse(p.items) : (p.items || []); } catch(e) {}
+      return p.vendorName === s.vendorName && items.some(i => i.sku === s.sku && i.color === s.color);
+    });
+    if (!po) return;
+    const items = typeof po.items === 'string' ? JSON.parse(po.items) : (po.items || []);
+    const ordered = items.find(i => i.sku === s.sku && i.color === s.color)?.qty || 0;
+    const diff = Number(ordered) - Number(s.shipped);
+    if (diff > 0) {
+      shortages.push({ sku: s.sku, color: s.color, price: s.price || 0, qty: diff });
+    }
+  });
+
+  if (!shortages.length) { toast('沒有欠貨項目'); return; }
+
+  const vendor = batchItems[0].vendorName;
+  const newPO = {
+    vendorName: vendor,
+    date: todayStr(),
+    items: JSON.stringify(shortages),
+    status: 'pending',
+    note: '補貨單（自動建立）',
+    promiseDate: '',
+    remindDays: 2,
+    createdBy: currentUser.username,
+    createdAt: new Date().toISOString(),
+  };
+
+  try {
+    await api('addPO', { row: newPO });
+    toast(`✓ 已建立補貨採購單：${vendor} ${shortages.map(s=>s.sku+s.color+s.qty+'件').join('、')}`);
+    await loadAll();
+    go('po');
+  } catch(e) { toast('建立失敗', true); }
 }
 
 async function togglePaymentBatch(batchKey, newStatus) {
