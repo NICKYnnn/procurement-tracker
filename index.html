@@ -781,7 +781,8 @@ function renderShipments(){
   // Group by batchId (fallback: group by vendorName+date+logistics)
   const batches=new Map();
   filtered.forEach(s=>{
-    const normDate=(s.date||'').slice(0,10)||new Date(s.date).toISOString().slice(0,10)||s.date||'';
+    const rawDate=s.date||'';
+    const normDate=rawDate.length>=10?rawDate.slice(0,10):rawDate;
     const key=s.batchId||(s.vendorName+'|'+normDate+'|'+(s.logistics||'')+'|'+(s.tracking||''));
     if(!batches.has(key)) batches.set(key,[]);
     batches.get(key).push(s);
