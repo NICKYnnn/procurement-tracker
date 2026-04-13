@@ -685,7 +685,10 @@ function renderDash(){
   const dueSoon=DB.pos.filter(p=>{const d=diffD(p.promiseDate);return d!==null&&d>=0&&d<=Number(p.remindDays||2)&&p.status!=='done';});
   const shortage=DB.shipments.filter(s=>s.status==='數量短缺');
   const thisMonth=new Date().toISOString().slice(0,7);
-  const monthShips=DB.shipments.filter(s=>(s.date||'').slice(0,7)===thisMonth);
+  const monthShips=DB.shipments.filter(s=>{
+    const d=(s.date||'').slice(0,7);
+    return !d||d===thisMonth; // 空日期也算進去
+  });
   const monthAmt=monthShips.reduce((a,s)=>a+Number(s.price||0)*Number(s.shipped||0),0);
   const monthUnpaid=monthShips.filter(s=>isNonMonthlyVendor(s.vendorName)&&s.paymentStatus!=='paid').reduce((a,s)=>a+Number(s.price||0)*Number(s.shipped||0),0);
   updateBadge('nb-alert',overdue.length+dueSoon.length);
