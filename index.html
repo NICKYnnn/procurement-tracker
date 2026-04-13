@@ -726,9 +726,39 @@ async function savePromise(){
   try{await api('updatePO',{id,updates:{promiseDate:document.getElementById('prom-date').value,remindDays:document.getElementById('prom-days').value,note:document.getElementById('prom-note').value,status:'pending'}});toast('承諾日已更新 ✓');closeOv('promise-modal');await loadAll();}catch(e){}
 }
 
+function guessVendorBySku(sku) {
+  // Try to find vendor from PO records by SKU
+  for (const po of DB.pos) {
+    let items = [];
+    try { items = typeof po.items === 'string' ? JSON.parse(po.items) : (po.items||[]); } catch(e) {}
+    if (items.some(i => i.sku === sku)) return po.vendorName;
+  }
+  // Try from other shipments with same SKU that have vendor
+  const match = DB.shipments.find(s => s.sku === sku && s.vendorName);
+  return match ? match.vendorName : '';
+}
+
+async function fixEmptyVendors() {
+  const empties = DB.shipments.filter(s => !s.vendorName);
+  if (!empties.length) return;
+  let fixed = 0;
+  for (const s of empties) {
+    const guessed = guessVendorBySku(s.sku);
+    if (guessed) {
+      try {
+        await api('updateShipment', { id: s.id, updates: { vendorName: guessed } });
+        s.vendorName = guessed; // update local copy
+        fixed++;
+      } catch(e) {}
+    }
+  }
+  if (fixed) { toast(`已自動補上 ${fixed} 筆廠商名稱 ✓`); renderShipments(); }
+}
+
 function renderShipments(){
   const cfg=ROLE_CFG[currentUser.role];
-  console.log('Shipments:', DB.shipments.map(s=>({id:s.id,vendor:s.vendorName,terms:DB.vendors.find(v=>v.name===s.vendorName)?.terms})));
+  // Auto-fix empty vendors on first render
+  if (DB.shipments.some(s => !s.vendorName)) fixEmptyVendors();
   const vf=document.getElementById('ship-vf').value;
   const rows=DB.shipments.filter(s=>!vf||s.vendorName===vf);
   document.getElementById('ship-tbody').innerHTML=rows.map(s=>{const amt=Number(s.price||0)*Number(s.received||s.shipped||0);const trackHtml=s.tracking?`<a href="https://www.google.com/search?q=${encodeURIComponent((s.logistics||'')+' '+s.tracking)}" target="_blank" style="font-family:var(--mono);font-size:11px;color:var(--info);text-decoration:none">${s.tracking}</a>`:'—';const paymentBadge = isNonMonthlyVendor(s.vendorName) ? (s.paymentStatus==='paid'?`<button class="badge b-ok" style="cursor:pointer;border:none" onclick="togglePayment('${s.id}','unpaid')">已付款</button>`:`<button class="badge b-danger" style="cursor:pointer;border:none" onclick="togglePayment('${s.id}','paid')">未付款</button>`) : '';
