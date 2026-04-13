@@ -771,6 +771,13 @@ async function markDone(id) {
   const po = DB.pos.find(p => p.id === id);
   if (!po) return;
 
+  // Disable all markDone buttons immediately to prevent double-click
+  document.querySelectorAll(`[onclick="markDone('${id}')"]`).forEach(btn => {
+    btn.disabled = true;
+    btn.textContent = '處理中...';
+    btn.style.opacity = '0.6';
+  });
+
   try {
     // 1. Update PO status to done
     await api('updatePO', { id, updates: { status: 'done' } });
@@ -781,27 +788,33 @@ async function markDone(id) {
 
     if (items.length) {
       const batchId = 'B-' + Date.now();
-      for (const item of items) {
-        const row = {
-          date: todayStr(),
-          vendorName: po.vendorName,
-          sku: item.sku,
-          color: item.color,
-          price: item.price || 0,
-          shipped: item.qty,
-          received: '',
-          status: '已出貨',
-          note: '',
-          paymentStatus: '',
-          paymentDate: '',
-          paymentMethod: '',
-          batchId,
-          poId: id,
-          createdBy: currentUser.username
-        };
-        try { await api('addShipment', { row }); } catch(e) {}
+      const rows = items.map(item => ({
+        date: todayStr(),
+        vendorName: po.vendorName,
+        sku: item.sku,
+        color: item.color,
+        price: item.price || 0,
+        shipped: item.qty,
+        received: '',
+        status: '已出貨',
+        note: '',
+        paymentStatus: '',
+        paymentDate: '',
+        paymentMethod: '',
+        batchId,
+        poId: id,
+        createdBy: currentUser.username
+      }));
+      // Add one by one with small delay to avoid rate limiting
+      let success = 0;
+      toast(`⏳ 建立出貨記錄中（共 ${items.length} 筆）...`);
+      for (const row of rows) {
+        try {
+          await api('addShipment', { row });
+          success++;
+        } catch(e) { console.error('addShipment failed:', e); }
       }
-      toast(`✓ 已確認出貨，自動建立 ${items.length} 筆出貨記錄`);
+      toast(`✓ 已確認出貨，建立 ${success}/${items.length} 筆出貨記錄`);
     } else {
       toast('已標記確認出貨 ✓');
     }
@@ -1592,6 +1605,23 @@ function isNonMonthlyVendor(vendorName) {
 }
 
 
+
+// ── Button loading helper ─────────────────────────────────────────────────────
+function btnLoad(el, text='處理中...') {
+  if (!el) return;
+  el._origText = el.textContent;
+  el._origDisabled = el.disabled;
+  el.disabled = true;
+  el.textContent = text;
+  el.style.opacity = '0.6';
+}
+function btnRestore(el) {
+  if (!el) return;
+  el.disabled = el._origDisabled || false;
+  el.textContent = el._origText || el.textContent;
+  el.style.opacity = '';
+}
+
 // ── New vendor handling ───────────────────────────────────────────────────────
 function checkNewVendor() {
   const sel = document.getElementById('pm-vendor');
@@ -1625,11 +1655,11 @@ function checkPaymentField() {
 // ══ DELETE & EDIT SHIPMENT ════════════════════════════════════════════════════
 async function deleteShipment(id) {
   if (!confirm('確定要刪除這筆出貨記錄？')) return;
-  try {
-    await api('deleteRow', { sheetName: 'Shipments', id });
-    toast('已刪除 ✓');
-    await loadAll();
-  } catch(e) {}
+  // Optimistic update
+  DB.shipments = DB.shipments.filter(s => s.id !== id);
+  renderShipments();
+  toast('已刪除 ✓');
+  api('deleteRow', { sheetName: 'Shipments', id }).catch(()=>{ toast('刪除失敗，請重新整理', true); loadAll(); });
 }
 
 function editShipment(id) {
@@ -1680,12 +1710,13 @@ async function saveEditShipment() {
     paymentStatus: document.getElementById('esm-payment').value || '',
     paymentMethod: document.getElementById('esm-payment-method')?.value || '',
   };
-  try {
-    await api('updateShipment', { id, updates });
-    toast('已更新 ✓');
-    closeOv('edit-ship-modal');
-    await loadAll();
-  } catch(e) {}
+  // Optimistic update local DB
+  const shipIdx = DB.shipments.findIndex(s => s.id === id);
+  if (shipIdx >= 0) Object.assign(DB.shipments[shipIdx], updates);
+  closeOv('edit-ship-modal');
+  renderShipments();
+  toast('已更新 ✓');
+  api('updateShipment', { id, updates }).catch(()=>{ toast('儲存失敗，請重新整理', true); loadAll(); });
 }
 
 // ══ DELETE & EDIT PO ══════════════════════════════════════════════════════════
@@ -1694,6 +1725,12 @@ async function undoShipment(poId) {
   if (!confirm('確定要撤銷出貨？會刪除對應的出貨記錄並將採購單改回待出貨。')) return;
   const po = DB.pos.find(p => p.id === poId);
   if (!po) return;
+
+  document.querySelectorAll(`[onclick="undoShipment('${poId}')"]`).forEach(btn => {
+    btn.disabled = true;
+    btn.textContent = '處理中...';
+    btn.style.opacity = '0.6';
+  });
 
   try {
     // 1. Revert PO status
@@ -1729,11 +1766,10 @@ async function undoShipment(poId) {
 
 async function deletePO(id) {
   if (!confirm('確定要刪除這筆採購單？')) return;
-  try {
-    await api('deleteRow', { sheetName: 'PurchaseOrders', id });
-    toast('已刪除 ✓');
-    await loadAll();
-  } catch(e) {}
+  DB.pos = DB.pos.filter(p => p.id !== id);
+  renderPOs();
+  toast('已刪除 ✓');
+  api('deleteRow', { sheetName: 'PurchaseOrders', id }).catch(()=>{ toast('刪除失敗，請重新整理', true); loadAll(); });
 }
 
 let epoItemCount = 0;
@@ -1820,12 +1856,13 @@ async function saveEditPO() {
     remindDays: document.getElementById('epo-remind').value,
     items: JSON.stringify(items),
   };
-  try {
-    await api('updatePO', { id, updates });
-    toast('採購單已更新 ✓');
-    closeOv('edit-po-modal');
-    await loadAll();
-  } catch(e) {}
+  // Optimistic update
+  const poIdx = DB.pos.findIndex(p => p.id === id);
+  if (poIdx >= 0) Object.assign(DB.pos[poIdx], updates);
+  closeOv('edit-po-modal');
+  renderPOs();
+  toast('採購單已更新 ✓');
+  api('updatePO', { id, updates }).catch(()=>{ toast('儲存失敗，請重新整理', true); loadAll(); });
 }
 
 
@@ -1935,21 +1972,28 @@ function goUnpaid() {
 
 async function togglePaymentBatch(batchKey, newStatus) {
   const items = DB.shipments.filter(s => (s.batchId||(s.vendorName+'|'+(s.date||'').slice(0,10)+'|'+(s.logistics||'')+'|'+(s.tracking||''))) === batchKey);
-  for (const s of items) {
-    try { await api('updateShipment', {id:s.id, updates:{paymentStatus:newStatus, paymentDate:newStatus==='paid'?todayStr():''}}); } catch(e){}
-  }
+  // Optimistic update
+  items.forEach(s => { s.paymentStatus = newStatus; s.paymentDate = newStatus==='paid'?todayStr():''; });
+  renderShipments();
   toast(newStatus==='paid'?'已標記付款 ✓':'已標記未付款');
-  await loadAll();
+  // Background API calls
+  for (const s of items) {
+    api('updateShipment', {id:s.id, updates:{paymentStatus:newStatus, paymentDate:newStatus==='paid'?todayStr():''}}).catch(()=>{});
+  }
 }
 
 async function deleteBatch(batchKey) {
   const items = DB.shipments.filter(s => (s.batchId||(s.vendorName+'|'+(s.date||'').slice(0,10)+'|'+(s.logistics||'')+'|'+(s.tracking||''))) === batchKey);
   if (!confirm(`確定要刪除這張出貨單（共 ${items.length} 筆記錄）？`)) return;
-  for (const s of items) {
-    try { await api('deleteRow', {sheetName:'Shipments', id:s.id}); } catch(e){}
-  }
+  // Optimistic update
+  const ids = items.map(s => s.id);
+  DB.shipments = DB.shipments.filter(s => !ids.includes(s.id));
+  renderShipments();
   toast('已刪除 ✓');
-  await loadAll();
+  // Background delete
+  for (const s of items) {
+    api('deleteRow', {sheetName:'Shipments', id:s.id}).catch(()=>{});
+  }
 }
 
 function editBatchShipment(batchKey) {
@@ -1959,11 +2003,12 @@ function editBatchShipment(batchKey) {
 }
 
 async function togglePayment(id, newStatus) {
-  try {
-    await api('updateShipment', { id, updates: { paymentStatus: newStatus, paymentDate: newStatus==='paid'?todayStr():'' } });
-    toast(newStatus==='paid'?'已標記付款 ✓':'已標記未付款');
-    await loadAll();
-  } catch(e) {}
+  // Optimistic update
+  const s = DB.shipments.find(x => x.id === id);
+  if (s) { s.paymentStatus = newStatus; s.paymentDate = newStatus==='paid'?todayStr():''; }
+  renderShipments();
+  toast(newStatus==='paid'?'已標記付款 ✓':'已標記未付款');
+  api('updateShipment', { id, updates: { paymentStatus: newStatus, paymentDate: newStatus==='paid'?todayStr():'' } }).catch(()=>{});
 }
 function exportCSV(){
   const rows=[['日期','廠商','款號','顏色','發貨','到貨','狀態']];
