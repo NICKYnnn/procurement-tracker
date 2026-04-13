@@ -779,8 +779,9 @@ function renderBilling(){
 
 function renderVendors(){
   const cfg=ROLE_CFG[currentUser.role];
+  console.log('Vendors data:', JSON.stringify(DB.vendors));
   const byV={};DB.shipments.forEach(s=>{byV[s.vendorName]=(byV[s.vendorName]||0)+Number(s.price||0)*Number(s.received||s.shipped||0);});
-  document.getElementById('vendor-tbody').innerHTML=DB.vendors.map(v=>`<tr><td style="font-weight:600">${v.name}</td><td>${v.contact||'—'}</td><td style="color:var(--ink3);font-size:12px">${v.phone||'—'}</td>${cfg.showPrice?`<td>${bdg(v.terms||'—','b-info')}</td><td class="mono" style="font-weight:600">$${(byV[v.name]||0).toLocaleString()}</td>`:''}<td>${bdg(v.active==='TRUE'?'合作中':'停用',v.active==='TRUE'?'b-ok':'b-gray')}</td></tr>`).join('')||'<tr><td colspan="6" style="padding:20px;text-align:center;color:var(--ink3)">暫無廠商</td></tr>';
+  document.getElementById('vendor-tbody').innerHTML=DB.vendors.map(v=>`<tr><td style="font-weight:600">${v.name}</td><td>${v.contact||'—'}</td><td style="color:var(--ink3);font-size:12px">${v.phone||'—'}</td>${cfg.showPrice?`<td>${bdg(v.terms||'—','b-info')}</td><td class="mono" style="font-weight:600">$${(byV[v.name]||0).toLocaleString()}</td>`:''}<td>${bdg((String(v.active).toUpperCase()==='TRUE'||v.active===true)?'合作中':'停用',(String(v.active).toUpperCase()==='TRUE'||v.active===true)?'b-ok':'b-gray')}</td></tr>`).join('')||'<tr><td colspan="6" style="padding:20px;text-align:center;color:var(--ink3)">暫無廠商</td></tr>';
 }
 function openVendorModal(){document.getElementById('vendor-modal').classList.add('open');}
 async function saveVendor(){
@@ -1212,7 +1213,9 @@ async function confirmArrivalBatch(jsonStr) {
 function isNonMonthlyVendor(vendorName) {
   const v = DB.vendors.find(x => x.name === vendorName);
   if (!v) return false;
-  return !v.terms.includes('月結');
+  const terms = String(v.terms || '').trim();
+  console.log('isNonMonthly check:', vendorName, terms, !terms.includes('月結'));
+  return terms.length > 0 && !terms.includes('月結');
 }
 
 function checkPaymentField() {
@@ -1301,14 +1304,15 @@ let epoItemCount = 0;
 function editPO(id) {
   const po = DB.pos.find(x => x.id === id);
   if (!po) return;
-  updateVendorSelects();
+  // Populate vendor select directly
+  const epoVSel = document.getElementById('epo-vendor');
+  epoVSel.innerHTML = DB.vendors.map(v=>`<option value="${v.name}">${v.name}</option>`).join('');
   document.getElementById('epo-id').value = id;
-  document.getElementById('epo-date').value = po.date || '';
+  document.getElementById('epo-date').value = (po.date||'').slice(0,10);
   document.getElementById('epo-note').value = po.note || '';
   document.getElementById('epo-promise').value = po.promiseDate || '';
   // Set vendor
-  const vendorSel = document.getElementById('epo-vendor');
-  for (let opt of vendorSel.options) { if (opt.value === po.vendorName) { opt.selected = true; break; } }
+  for (let opt of epoVSel.options) { if (opt.value === po.vendorName) { opt.selected = true; break; } }
   // Set remind
   const remindSel = document.getElementById('epo-remind');
   for (let opt of remindSel.options) { if (opt.value === String(po.remindDays||2)) { opt.selected = true; break; } }
@@ -1341,12 +1345,12 @@ function editPO(id) {
 
 function makeEpoRow(i) {
   const cfg = ROLE_CFG[currentUser.role];
-  return `<div class="form-grid ${cfg.showPrice?'g3':'g2'}" id="epi-${i}" style="margin-bottom:8px">
-    <div class="form-row" style="margin:0"><label style="${i?'display:none':''}">款號</label><input type="text" id="epi-sku-${i}" placeholder="款號"></div>
-    <div class="form-row" style="margin:0"><label style="${i?'display:none':''}">顏色</label><input type="text" id="epi-color-${i}" placeholder="顏色"></div>
-    ${cfg.showPrice?`<div class="form-row" style="margin:0"><label style="${i?'display:none':''}">單價</label><input type="number" id="epi-price-${i}" placeholder="0"></div>`:`<input type="hidden" id="epi-price-${i}" value="0">`}
-    <div class="form-row" style="margin:0"><label style="${i?'display:none':''}">數量</label><input type="number" id="epi-qty-${i}" placeholder="0"></div>
-    ${i?`<div style="display:flex;align-items:flex-end;padding-bottom:2px"><button class="btn btn-ghost btn-xs" onclick="document.getElementById('epi-${i}').remove()">✕</button></div>`:'<div></div>'}
+  return `<div style="display:flex;gap:6px;align-items:flex-end;margin-bottom:8px" id="epi-${i}">
+    <div style="flex:2"><label style="display:block;font-size:11px;color:var(--ink2);margin-bottom:3px${i?';display:none':''}">款號</label><input type="text" id="epi-sku-${i}" placeholder="款號" style="width:100%;padding:7px 9px;border:1px solid var(--border);border-radius:7px;font-size:13px;font-family:var(--font)"></div>
+    <div style="flex:2"><label style="display:block;font-size:11px;color:var(--ink2);margin-bottom:3px${i?';display:none':''}">顏色</label><input type="text" id="epi-color-${i}" placeholder="顏色" style="width:100%;padding:7px 9px;border:1px solid var(--border);border-radius:7px;font-size:13px;font-family:var(--font)"></div>
+    ${cfg.showPrice?`<div style="flex:1.5"><label style="display:block;font-size:11px;color:var(--ink2);margin-bottom:3px${i?';display:none':''}">單價</label><input type="number" id="epi-price-${i}" placeholder="0" style="width:100%;padding:7px 9px;border:1px solid var(--border);border-radius:7px;font-size:13px;font-family:var(--font)"></div>`:`<input type="hidden" id="epi-price-${i}" value="0">`}
+    <div style="flex:1.5"><label style="display:block;font-size:11px;color:var(--ink2);margin-bottom:3px${i?';display:none':''}">數量</label><input type="number" id="epi-qty-${i}" placeholder="0" style="width:100%;padding:7px 9px;border:1px solid var(--border);border-radius:7px;font-size:13px;font-family:var(--font)"></div>
+    <div style="padding-bottom:2px">${i?`<button class="btn btn-ghost btn-xs" onclick="document.getElementById('epi-${i}').remove()">✕</button>`:'<span style="display:inline-block;width:28px"></span>'}</div>
   </div>`;
 }
 
