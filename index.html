@@ -781,7 +781,8 @@ function renderShipments(){
   // Group by batchId (fallback: group by vendorName+date+logistics)
   const batches=new Map();
   filtered.forEach(s=>{
-    const key=s.batchId||(s.vendorName+'|'+s.date+'|'+(s.logistics||'')+'|'+(s.tracking||''));
+    const normDate=(s.date||'').slice(0,10)||new Date(s.date).toISOString().slice(0,10)||s.date||'';
+    const key=s.batchId||(s.vendorName+'|'+normDate+'|'+(s.logistics||'')+'|'+(s.tracking||''));
     if(!batches.has(key)) batches.set(key,[]);
     batches.get(key).push(s);
   });
@@ -813,7 +814,7 @@ function renderShipments(){
   }).forEach(([key,items])=>{
     const first=items[0];
     const vendor=first.vendorName||'—';
-    const date=first.date||'—';
+    const date=first.date?fmtDate(first.date):'—';
     const logistics=first.logistics||'';
     const tracking=first.tracking||'';
     const totalShipped=items.reduce((a,s)=>a+Number(s.shipped||0),0);
