@@ -355,7 +355,7 @@ input,select,textarea{font-family:var(--font);color:var(--ink)}
       <h1>廠商管理</h1>
       <button class="btn btn-primary btn-sm" onclick="openVendorModal()">＋ 新增</button>
     </div>
-    <div class="content"><div class="section"><div style="overflow-x:auto"><table class="tbl"><thead><tr><th>廠商名稱</th><th>聯絡人</th><th>電話</th><th>付款條件</th><th id="th-vamt">本月帳款</th><th>狀態</th></tr></thead><tbody id="vendor-tbody"></tbody></table></div></div></div>
+    <div class="content"><div class="section"><div style="overflow-x:auto"><table class="tbl"><thead><tr><th>廠商名稱</th><th>聯絡人</th><th>電話</th><th>付款條件</th><th id="th-vamt">本月帳款</th><th>狀態</th><th></th></tr></thead><tbody id="vendor-tbody"></tbody></table></div></div></div>
   </div>
   <div id="page-settings" class="page">
     <div class="topbar">
@@ -460,6 +460,19 @@ input,select,textarea{font-family:var(--font);color:var(--ink)}
     <div class="form-grid g2"><div class="form-row"><label>聯絡人</label><input type="text" id="vm-contact"></div><div class="form-row"><label>電話</label><input type="text" id="vm-phone"></div></div>
     <div class="form-row"><label>付款條件</label><select id="vm-terms"><option>現付</option><option>月結30天</option><option>貨到付款</option></select></div>
     <div class="modal-footer"><button class="btn btn-ghost" onclick="closeOv('vendor-modal')">取消</button><button class="btn btn-primary" onclick="saveVendor()">新增至雲端</button></div>
+  </div>
+</div>
+
+<div class="overlay" id="edit-vendor-modal">
+  <div class="modal" style="max-width:420px">
+    <h3>編輯廠商</h3>
+    <input type="hidden" id="evm-id">
+    <div class="form-row"><label>廠商名稱</label><input type="text" id="evm-name"></div>
+    <div class="form-grid g2"><div class="form-row"><label>聯絡人</label><input type="text" id="evm-contact" placeholder="選填"></div><div class="form-row"><label>電話/微信</label><input type="text" id="evm-phone" placeholder="選填"></div></div>
+    <div class="form-row"><label>付款條件</label><select id="evm-terms"><option>現付</option><option>月結30天</option><option>貨到付款</option></select></div>
+    <div class="form-row"><label>備註</label><input type="text" id="evm-note" placeholder="選填"></div>
+    <div class="form-row"><label>狀態</label><select id="evm-active"><option value="TRUE">合作中</option><option value="FALSE">停用</option></select></div>
+    <div class="modal-footer"><button class="btn btn-ghost" onclick="closeOv('edit-vendor-modal')">取消</button><button class="btn btn-primary" onclick="saveEditVendor()">儲存</button></div>
   </div>
 </div>
 <div class="overlay" id="inv-modal">
@@ -891,7 +904,7 @@ function renderVendors(){
   const cfg=ROLE_CFG[currentUser.role];
   console.log('Vendors data:', JSON.stringify(DB.vendors));
   const byV={};DB.shipments.forEach(s=>{byV[s.vendorName]=(byV[s.vendorName]||0)+Number(s.price||0)*Number(s.received||s.shipped||0);});
-  document.getElementById('vendor-tbody').innerHTML=DB.vendors.map(v=>`<tr><td style="font-weight:600">${v.name}</td><td>${v.contact||'—'}</td><td style="color:var(--ink3);font-size:12px">${v.phone||'—'}</td>${cfg.showPrice?`<td>${bdg(v.terms||'—','b-info')}</td><td class="mono" style="font-weight:600">$${(byV[v.name]||0).toLocaleString()}</td>`:''}<td>${bdg((String(v.active).toUpperCase()==='TRUE'||v.active===true)?'合作中':'停用',(String(v.active).toUpperCase()==='TRUE'||v.active===true)?'b-ok':'b-gray')}</td></tr>`).join('')||'<tr><td colspan="6" style="padding:20px;text-align:center;color:var(--ink3)">暫無廠商</td></tr>';
+  document.getElementById('vendor-tbody').innerHTML=DB.vendors.map(v=>`<tr><td style="font-weight:600">${v.name}</td><td>${v.contact||'—'}</td><td style="color:var(--ink3);font-size:12px">${v.phone||'—'}</td>${cfg.showPrice?`<td>${bdg(v.terms||'—','b-info')}</td><td class="mono" style="font-weight:600">$${(byV[v.name]||0).toLocaleString()}</td>`:''}<td>${bdg((String(v.active).toUpperCase()==='TRUE'||v.active===true)?'合作中':'停用',(String(v.active).toUpperCase()==='TRUE'||v.active===true)?'b-ok':'b-gray')}</td><td style="white-space:nowrap"><button class="btn btn-ghost btn-xs" onclick="editVendor('${v.id}')">編輯</button> <button class="btn btn-xs" style="background:#fdecea;color:#b52a1a;border:none" onclick="deleteVendor('${v.id}','${v.name}')">刪除</button></td></tr>`).join('')||'<tr><td colspan="6" style="padding:20px;text-align:center;color:var(--ink3)">暫無廠商</td></tr>';
 }
 function openVendorModal(){document.getElementById('vendor-modal').classList.add('open');}
 async function saveVendor(){
@@ -1523,6 +1536,54 @@ async function saveEditPO() {
     closeOv('edit-po-modal');
     await loadAll();
   } catch(e) {}
+}
+
+
+// ══ EDIT / DELETE VENDOR ═════════════════════════════════════════════════════
+function editVendor(id) {
+  const v = DB.vendors.find(x => x.id === id);
+  if (!v) return;
+  document.getElementById('evm-id').value = id;
+  document.getElementById('evm-name').value = v.name || '';
+  document.getElementById('evm-contact').value = v.contact || '';
+  document.getElementById('evm-phone').value = v.phone || '';
+  document.getElementById('evm-note').value = v.note || '';
+  // Set terms
+  const termsSel = document.getElementById('evm-terms');
+  for (let opt of termsSel.options) { if (opt.value === v.terms) { opt.selected = true; break; } }
+  // Set active
+  const activeSel = document.getElementById('evm-active');
+  const isActive = String(v.active).toUpperCase() === 'TRUE' || v.active === true;
+  for (let opt of activeSel.options) { if (opt.value === (isActive ? 'TRUE' : 'FALSE')) { opt.selected = true; break; } }
+  document.getElementById('edit-vendor-modal').classList.add('open');
+}
+
+async function saveEditVendor() {
+  const id = document.getElementById('evm-id').value;
+  const updates = {
+    name: document.getElementById('evm-name').value,
+    contact: document.getElementById('evm-contact').value,
+    phone: document.getElementById('evm-phone').value,
+    terms: document.getElementById('evm-terms').value,
+    note: document.getElementById('evm-note').value,
+    active: document.getElementById('evm-active').value,
+  };
+  if (!updates.name) { toast('廠商名稱不能為空', true); return; }
+  try {
+    await api('updateRow', { sheetName: 'Vendors', id, updates });
+    toast('廠商資料已更新 ✓');
+    closeOv('edit-vendor-modal');
+    await loadAll();
+  } catch(e) { toast('儲存失敗', true); }
+}
+
+async function deleteVendor(id, name) {
+  if (!confirm(`確定要刪除廠商「${name}」？`)) return;
+  try {
+    await api('deleteRow', { sheetName: 'Vendors', id });
+    toast('已刪除 ✓');
+    await loadAll();
+  } catch(e) { toast('刪除失敗', true); }
 }
 
 async function togglePaymentBatch(batchKey, newStatus) {
