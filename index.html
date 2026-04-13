@@ -432,10 +432,12 @@ input,select,textarea{font-family:var(--font);color:var(--ink)}
     <div class="form-grid g2"><div class="form-row"><label>狀態</label><select id="sm-status"><option>待出貨</option><option selected>已出貨</option><option>已到貨</option><option>數量短缺</option></select></div><div class="form-row"><label>備註</label><input type="text" id="sm-note" placeholder="選填"></div></div>
     <div class="form-row" id="sm-payment-row" style="display:none">
       <label>付款狀態</label>
-      <div style="display:flex;gap:8px">
+      <div style="display:flex;gap:8px;margin-bottom:8px">
         <select id="sm-payment" style="flex:1"><option value="">未設定</option><option value="unpaid">未付款</option><option value="paid">已付款</option></select>
         <input type="date" id="sm-payment-date" style="flex:1" title="付款日期">
       </div>
+      <label>付款方式</label>
+      <select id="sm-payment-method"><option value="">未設定</option><option>支付寶/微信</option><option>匯款</option></select>
     </div>
     <div class="form-grid g2"><div class="form-row"><label>物流方式</label><select id="sm-logistics"><option value="">未指定</option><option>海運</option><option>空運</option><option>海快</option><option>其他</option></select></div><div class="form-row"><label>物流單號</label><input type="text" id="sm-tracking" placeholder="輸入追蹤號碼"></div></div>
     <div class="modal-footer"><button class="btn btn-ghost" onclick="closeOv('ship-modal')">取消</button><button class="btn btn-primary" onclick="saveShipment()">儲存至雲端</button></div>
@@ -456,7 +458,7 @@ input,select,textarea{font-family:var(--font);color:var(--ink)}
     <h3>新增廠商</h3>
     <div class="form-row"><label>廠商名稱</label><input type="text" id="vm-name"></div>
     <div class="form-grid g2"><div class="form-row"><label>聯絡人</label><input type="text" id="vm-contact"></div><div class="form-row"><label>電話</label><input type="text" id="vm-phone"></div></div>
-    <div class="form-row"><label>付款條件</label><select id="vm-terms"><option>月結30天</option><option>月結60天</option><option>貨到付款</option><option>預付</option><option>現付</option></select></div>
+    <div class="form-row"><label>付款條件</label><select id="vm-terms"><option>現付</option><option>月結30天</option><option>貨到付款</option></select></div>
     <div class="modal-footer"><button class="btn btn-ghost" onclick="closeOv('vendor-modal')">取消</button><button class="btn btn-primary" onclick="saveVendor()">新增至雲端</button></div>
   </div>
 </div>
@@ -482,7 +484,9 @@ input,select,textarea{font-family:var(--font);color:var(--ink)}
     <div class="form-grid g2"><div class="form-row"><label>物流單號</label><input type="text" id="esm-tracking"></div><div class="form-row"><label>備註</label><input type="text" id="esm-note"></div></div>
     <div class="form-row" id="esm-payment-row" style="display:none">
       <label>付款狀態</label>
-      <select id="esm-payment"><option value="">未設定</option><option value="unpaid">未付款</option><option value="paid">已付款</option></select>
+      <select id="esm-payment" style="margin-bottom:8px"><option value="">未設定</option><option value="unpaid">未付款</option><option value="paid">已付款</option></select>
+      <label>付款方式</label>
+      <select id="esm-payment-method"><option value="">未設定</option><option>支付寶/微信</option><option>匯款</option></select>
     </div>
     <div class="modal-footer"><button class="btn btn-ghost" onclick="closeOv('edit-ship-modal')">取消</button><button class="btn btn-primary" onclick="saveEditShipment()">儲存</button></div>
   </div>
@@ -808,7 +812,7 @@ function renderShipments(){
         ${tracking?`<span>${trackHtml}</span>`:''}
         ${cfg.showPrice?`<span style="font-size:12px;color:var(--ink2);font-family:var(--mono)">$${totalAmt.toLocaleString()}</span>`:''}
         <span style="margin-left:auto;display:flex;align-items:center;gap:8px">
-          ${paymentBadge}
+          ${paymentBadge}${first.paymentMethod?`<span style="font-size:11px;color:var(--ink2);background:var(--surface2);padding:2px 7px;border-radius:10px">${first.paymentMethod}</span>`:''}
           ${shipBdg(overallStatus)}
           <button class="btn btn-ghost btn-xs" onclick="editBatchShipment('${key}')">編輯</button>
           <button class="btn btn-xs" style="background:#fdecea;color:#b52a1a;border:none" onclick="deleteBatch('${key}')">刪除</button>
@@ -842,7 +846,7 @@ function renderShipments(){
 async function saveShipment(){
   const rec=document.getElementById('sm-received').value;
   const batchId='B-'+Date.now();
-  const row={date:document.getElementById('sm-date').value,vendorName:document.getElementById('sm-vendor').value,sku:document.getElementById('sm-sku').value||'—',color:document.getElementById('sm-color').value||'—',price:document.getElementById('sm-price').value||0,shipped:document.getElementById('sm-shipped').value||0,received:rec||'',status:document.getElementById('sm-status').value,note:document.getElementById('sm-note').value,logistics:document.getElementById('sm-logistics').value||'',tracking:document.getElementById('sm-tracking').value||'',paymentStatus:document.getElementById('sm-payment').value||'',paymentDate:document.getElementById('sm-payment-date').value||'',batchId,createdBy:currentUser.username};
+  const row={date:document.getElementById('sm-date').value,vendorName:document.getElementById('sm-vendor').value,sku:document.getElementById('sm-sku').value||'—',color:document.getElementById('sm-color').value||'—',price:document.getElementById('sm-price').value||0,shipped:document.getElementById('sm-shipped').value||0,received:rec||'',status:document.getElementById('sm-status').value,note:document.getElementById('sm-note').value,logistics:document.getElementById('sm-logistics').value||'',tracking:document.getElementById('sm-tracking').value||'',paymentStatus:document.getElementById('sm-payment').value||'',paymentDate:document.getElementById('sm-payment-date').value||'',paymentMethod:document.getElementById('sm-payment-method').value||'',batchId,createdBy:currentUser.username};
   try{await api('addShipment',{row});toast('出貨記錄已儲存 ✓');closeOv('ship-modal');await loadAll();}catch(e){}
 }
 
@@ -1388,6 +1392,7 @@ async function saveEditShipment() {
     logistics: document.getElementById('esm-logistics').value,
     tracking: document.getElementById('esm-tracking').value,
     paymentStatus: document.getElementById('esm-payment').value || '',
+    paymentMethod: document.getElementById('esm-payment-method')?.value || '',
   };
   try {
     await api('updateShipment', { id, updates });
