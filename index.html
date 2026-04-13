@@ -1196,9 +1196,11 @@ function parsePoText() {
     setTimeout(() => {
       const skuEl = document.getElementById('pi-sku-'+idx);
       const colorEl = document.getElementById('pi-color-'+idx);
+      const priceEl = document.getElementById('pi-price-'+idx);
       const qtyEl = document.getElementById('pi-qty-'+idx);
       if (skuEl) skuEl.value = item.sku;
       if (colorEl) colorEl.value = item.color;
+      if (priceEl && item.price !== undefined) priceEl.value = item.price;
       if (qtyEl) qtyEl.value = item.qty;
     }, 0);
   });
