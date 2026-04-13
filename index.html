@@ -665,7 +665,7 @@ function shipBdg(s){const m={'已到貨':'b-ok','已出貨':'b-info','待出貨'
 function poSt(po){if(po.status==='done')return 'done';const d=diffD(po.promiseDate);if(d!==null&&d<0)return 'overdue';return po.status||'pending';}
 function poStBdg(po){
   const d=diffD(po.promiseDate),st=poSt(po);
-  if(st==='done')return bdg('已完成','b-ok');
+  if(st==='done')return bdg('已出貨','b-ok');
   if(st==='overdue')return bdg(`逾期${Math.abs(d)}天`,'b-danger');
   if(d===0)return bdg('今天到期','b-danger');
   if(d!==null&&d<=Number(po.remindDays||2))return bdg(`${d}天後到期`,'b-warn');
@@ -716,11 +716,11 @@ function renderPO(){
     let items=[];try{items=typeof po.items==='string'?JSON.parse(po.items):(po.items||[]);}catch(e){}
     const totalQty=items.reduce((a,i)=>a+Number(i.qty||0),0);
     const totalAmt=items.reduce((a,i)=>a+Number(i.qty||0)*Number(i.price||0),0);
-    const promiseLine=po.promiseDate?`<span style="${st==='overdue'?'color:var(--accent);font-weight:600':d!==null&&d<=Number(po.remindDays||2)?'color:var(--warn);font-weight:600':'color:var(--ink3)'}">📅 ${fmtD(po.promiseDate)}${d<0?' (逾期'+Math.abs(d)+'天)':d===0?' (今天)':d!==null&&d<=Number(po.remindDays||2)?' ('+d+'天後)':''}</span>`:'';
+    const promiseLine=po.promiseDate&&st!=='done'?`<span style="${st==='overdue'?'color:var(--accent);font-weight:600':d!==null&&d<=Number(po.remindDays||2)?'color:var(--warn);font-weight:600':'color:var(--ink3)'}">📅 ${fmtD(po.promiseDate)}${d<0?' (逾期'+Math.abs(d)+'天)':d===0?' (今天)':d!==null&&d<=Number(po.remindDays||2)?' ('+d+'天後)':''}</span>`:'';
     return `<div class="po-card"><div class="po-card-hd"><div style="flex:1"><div class="po-num">${po.id} · ${fmtDate(po.date)}</div><div class="po-vendor">${po.vendorName}</div></div>${poStBdg(po)}</div>
       <div class="po-card-body"><span>📦 ${totalQty}件</span>${cfg.showPrice?`<span>💰 $${totalAmt.toLocaleString()}</span>`:''} ${promiseLine}${po.note?`<span style="color:var(--ink3)">📝${po.note}</span>`:''}</div>
       <div class="po-items-wrap">${items.map(i=>`<div class="po-item-row"><span class="sku">${i.sku}</span>${cdot(i.color)}<span>${i.color}</span><span style="color:var(--ink3)">×${i.qty}</span>${cfg.showPrice?`<span style="color:var(--ink2)">@$${i.price}=$${(Number(i.qty)*Number(i.price)).toLocaleString()}</span>`:''}</div>`).join('')}</div>
-      <div class="po-actions">${st!=='done'?`<button class="btn btn-ghost btn-sm" onclick="openPromiseModal('${po.id}')">更新承諾日</button><button class="btn btn-success btn-sm" onclick="markDone('${po.id}')">確認出貨</button>`:bdg('已完成','b-ok')}${st==='overdue'?`<button class="btn btn-primary btn-sm">🚨 追廠商</button>`:''}<button class="btn btn-ghost btn-sm" onclick="editPO('${po.id}')">編輯</button><button class="btn btn-xs" style="background:#fdecea;color:#b52a1a;border:none;padding:5px 10px;border-radius:7px" onclick="deletePO('${po.id}')">刪除</button></div></div>`;
+      <div class="po-actions">${st!=='done'?`<button class="btn btn-ghost btn-sm" onclick="openPromiseModal('${po.id}')">更新承諾日</button><button class="btn btn-success btn-sm" onclick="markDone('${po.id}')">確認出貨</button>`:bdg('已出貨','b-ok')}${st==='overdue'?`<button class="btn btn-primary btn-sm">🚨 追廠商</button>`:''}<button class="btn btn-ghost btn-sm" onclick="editPO('${po.id}')">編輯</button><button class="btn btn-xs" style="background:#fdecea;color:#b52a1a;border:none;padding:5px 10px;border-radius:7px" onclick="deletePO('${po.id}')">刪除</button></div></div>`;
   }).join('');
 }
 
