@@ -1083,11 +1083,10 @@ function parsePoQuickText(text) {
   const COLORS=['黑','白','咖啡','咖','紅','藍','粉','綠','黃','灰','橘','紫','米','銀','棕','橙','卡其','藏青','深藍','淺藍','深灰','淺灰','深咖','淺咖','杏'];
   const colorPat=COLORS.slice().sort((a,b)=>b.length-a.length).join('|');
   const pairRe=new RegExp('('+colorPat+')(\\d+)','g');
-
   let t=text.trim();
   const result={date:todayStr(),vendor:'',items:[]};
 
-  // 1. Extract date (anywhere)
+  // 1. Extract date
   const dateM=t.match(/(\d{1,2})[\/-](\d{1,2})/);
   if(dateM){
     const y=new Date().getFullYear();
@@ -1097,52 +1096,72 @@ function parsePoQuickText(text) {
 
   // 2. Extract vendor (fuzzy match)
   const vList=DB.vendors.map(v=>v.name);
-  let matched='';
   for(const v of vList.slice().sort((a,b)=>b.length-a.length)){
-    if(t.includes(v)){matched=v;t=t.replace(v,' ');break;}
+    if(t.includes(v)){result.vendor=v;t=t.replace(v,' ');break;}
   }
-  if(!matched){
-    // character overlap scoring
-    const words=t.split(/[\s，、,]+/).filter(w=>w&&!/^\d/.test(w));
+  if(!result.vendor){
+    const words=t.split(/[\s，、,]+/).filter(w=>w&&!/^[#$\d]/.test(w));
     let best='',bestScore=0;
     for(const w of words){
       for(const v of vList){
         const score=v.split('').filter(c=>w.includes(c)).length/v.length;
-        if(score>bestScore&&score>=0.4){bestScore=score;best=v;matched=v;}
+        if(score>bestScore&&score>=0.4){bestScore=score;best=v;}
       }
-      if(matched){t=t.replace(w,' ');break;}
     }
+    if(best){result.vendor=best;t=t.replace(t.split(/[\s，、,]+/).find(w=>w&&!/^[#$\d]/.test(w))||'','');}
   }
-  result.vendor=matched||fuzzyMatchVendor(t.split(/[\s，、,]+/).find(w=>w&&!/^\d/.test(w))||'');
   t=t.replace(/\s+/g,' ').trim();
 
-  // 3. Mark all color+qty spans so remaining digits = SKUs
-  const marked=t.split('');
-  let m; pairRe.lastIndex=0;
-  while((m=pairRe.exec(t))!==null){
-    for(let i=m.index;i<m.index+m[0].length;i++) marked[i]=null;
+  // 3. Check if using # prefix format
+  const hasHash=/#\d/.test(t);
+
+  if(hasHash){
+    // Split by # boundaries - each #SKU starts a segment
+    const segments=t.split(/(?=#\d)/);
+    segments.forEach(seg=>{
+      seg=seg.trim(); if(!seg) return;
+      const skuM=seg.match(/^#(\d+)/); if(!skuM) return;
+      const sku=skuM[1];
+      let rest=seg.slice(skuM[0].length);
+      // Extract price $number
+      let price=0;
+      const priceM=rest.match(/\$(\d+)/);
+      if(priceM){price=Number(priceM[1]);rest=rest.replace(priceM[0],' ');}
+      // Extract color+qty
+      pairRe.lastIndex=0; let m;
+      while((m=pairRe.exec(rest))!==null){
+        result.items.push({sku,color:m[1],qty:Number(m[2]),price});
+      }
+    });
+  } else {
+    // Legacy format: plain digits as SKU
+    // Extract global price
+    let globalPrice=0;
+    const priceM=t.match(/\$(\d+)/);
+    if(priceM){globalPrice=Number(priceM[1]);t=t.replace(priceM[0],' ');}
+    // Mark color+qty spans
+    const marked=t.split('');
+    pairRe.lastIndex=0; let m;
+    while((m=pairRe.exec(t))!==null){for(let i=m.index;i<m.index+m[0].length;i++)marked[i]=null;}
+    const clean=marked.map(c=>c===null?' ':c).join('');
+    const skusFound=[...clean.matchAll(/\d{2,}/g)].map(m=>({pos:m.index,sku:m[0]}));
+    if(!skusFound.length) return result;
+    let workText=t;
+    skusFound.forEach(({pos,sku},i)=>{
+      const skuIdx=workText.indexOf(sku);
+      if(skuIdx<0) return;
+      const nextSkuIdx=i+1<skusFound.length?workText.indexOf(skusFound[i+1].sku,skuIdx+1):workText.length;
+      const segment=workText.slice(skuIdx+sku.length,nextSkuIdx>skuIdx?nextSkuIdx:workText.length);
+      pairRe.lastIndex=0;
+      while((m=pairRe.exec(segment))!==null){
+        result.items.push({sku,color:m[1],qty:Number(m[2]),price:globalPrice});
+      }
+      workText=workText.slice(0,skuIdx)+'_'.repeat(sku.length)+workText.slice(skuIdx+sku.length);
+    });
   }
-  const clean=marked.map(c=>c===null?' ':c).join('');
-  const skusFound=[...clean.matchAll(/\d{2,}/g)].map(m=>({pos:m.index,sku:m[0]}));
-
-  if(!skusFound.length) return result;
-
-  // 4. Assign color-qty pairs to each SKU
-  let workText=t;
-  skusFound.forEach(({pos,sku},i)=>{
-    const skuIdx=workText.indexOf(sku);
-    if(skuIdx<0) return;
-    const nextSkuIdx=i+1<skusFound.length?workText.indexOf(skusFound[i+1].sku):workText.length;
-    const segment=workText.slice(skuIdx+sku.length,nextSkuIdx>skuIdx?nextSkuIdx:workText.length);
-    pairRe.lastIndex=0;
-    while((m=pairRe.exec(segment))!==null){
-      result.items.push({sku,color:m[1],qty:Number(m[2]),price:0});
-    }
-    workText=workText.slice(0,skuIdx)+'_'.repeat(sku.length)+workText.slice(skuIdx+sku.length);
-  });
-
   return result;
 }
+
 
 function parsePoText() {
   const text = document.getElementById('pm-quicktext').value.trim();
