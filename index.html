@@ -272,7 +272,8 @@ input,select,textarea{font-family:var(--font);color:var(--ink)}
     <div class="topbar">
       <button class="mob-menu" onclick="openMob()"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 4h12M2 8h12M2 12h12"/></svg></button>
       <h1>採購單</h1>
-      <div style="display:flex;gap:8px">
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <select id="po-date-filter" onchange="renderPO()" style="padding:6px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px;background:var(--surface);color:var(--ink)"><option value="">所有時間</option><option value="today">今天</option><option value="week">本週</option><option value="month">本月</option><option value="3month">近3個月</option></select>
         <select id="po-filter" onchange="renderPO()" style="padding:6px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px;background:var(--surface);color:var(--ink)">
           <option value="">全部</option><option value="pending">待出貨</option><option value="overdue">已逾期</option><option value="partial">部分到貨</option><option value="done">完成</option>
         </select>
@@ -333,7 +334,8 @@ input,select,textarea{font-family:var(--font);color:var(--ink)}
     <div class="topbar">
       <button class="mob-menu" onclick="openMob()"><svg width="16" height="16" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M2 4h12M2 8h12M2 12h12"/></svg></button>
       <h1>出貨記錄</h1>
-      <div style="display:flex;gap:8px">
+      <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
+        <select id="ship-date-filter" onchange="renderShipments()" style="padding:6px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px;background:var(--surface);color:var(--ink)"><option value="">所有時間</option><option value="today">今天</option><option value="week">本週</option><option value="month">本月</option><option value="3month">近3個月</option></select>
         <select id="ship-vf" onchange="renderShipments()" style="padding:6px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px;background:var(--surface);color:var(--ink)"><option value="">所有廠商</option></select>
         <button class="btn btn-primary btn-sm" onclick="openShipModal()">＋ 新增</button>
       </div>
@@ -737,7 +739,8 @@ function renderDash(){
 function renderPO(){
   const cfg=ROLE_CFG[currentUser.role];
   const f=document.getElementById('po-filter').value;
-  const filtered=DB.pos.filter(p=>!f||poSt(p)===f);
+  const dateRange=getDateFilterRange('po-date-filter');
+  const filtered=DB.pos.filter(p=>(!f||poSt(p)===f)&&inDateRange(p.date,dateRange));
   if(!filtered.length){document.getElementById('po-list').innerHTML='<div style="padding:30px;text-align:center;color:var(--ink3)">暫無採購單</div>';return;}
   document.getElementById('po-list').innerHTML=filtered.map(po=>{
     const d=diffD(po.promiseDate),st=poSt(po);
@@ -861,7 +864,8 @@ function renderShipments(){
   const cfg=ROLE_CFG[currentUser.role];
   if(DB.shipments.some(s=>!s.vendorName)) fixEmptyVendors();
   const vf=document.getElementById('ship-vf').value;
-  const filtered=DB.shipments.filter(s=>!vf||s.vendorName===vf);
+  const dateRange=getDateFilterRange('ship-date-filter');
+  const filtered=DB.shipments.filter(s=>(!vf||s.vendorName===vf)&&inDateRange(s.date,dateRange));
 
   // Group by batchId (fallback: group by vendorName+date+logistics)
   const batches=new Map();
@@ -1606,6 +1610,28 @@ function isNonMonthlyVendor(vendorName) {
 
 
 
+
+
+// ── Date filter helper ────────────────────────────────────────────────────────
+function getDateFilterRange(filterId) {
+  const val = document.getElementById(filterId)?.value || '';
+  if (!val) return null;
+  const now = new Date(); now.setHours(23,59,59,999);
+  const start = new Date();
+  if (val === 'today') { start.setHours(0,0,0,0); }
+  else if (val === 'week') { start.setDate(start.getDate() - start.getDay()); start.setHours(0,0,0,0); }
+  else if (val === 'month') { start.setDate(1); start.setHours(0,0,0,0); }
+  else if (val === '3month') { start.setMonth(start.getMonth()-3); start.setHours(0,0,0,0); }
+  return { start, end: now };
+}
+
+function inDateRange(dateStr, range) {
+  if (!range) return true;
+  if (!dateStr) return true; // no date = always show
+  const d = new Date(dateStr);
+  if (isNaN(d)) return true;
+  return d >= range.start && d <= range.end;
+}
 
 // ── Color normalize - remove 色 suffix for matching ──────────────────────────
 function normColor(c) { return (c||'').replace(/色$/,'').trim(); }
