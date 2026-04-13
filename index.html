@@ -748,7 +748,7 @@ function renderPO(){
     return `<div class="po-card"><div class="po-card-hd"><div style="flex:1"><div class="po-num">${po.id} · ${fmtDate(po.date)}</div><div class="po-vendor">${po.vendorName}</div></div>${poStBdg(po)}</div>
       <div class="po-card-body"><span>📦 ${totalQty}件</span>${cfg.showPrice?`<span>💰 $${totalAmt.toLocaleString()}</span>`:''} ${promiseLine}${po.note?`<span style="color:var(--ink3)">📝${po.note}</span>`:''}</div>
       <div class="po-items-wrap">${items.map(i=>`<div class="po-item-row"><span class="sku">${i.sku}</span>${cdot(i.color)}<span>${i.color}</span><span style="color:var(--ink3)">×${i.qty}</span>${cfg.showPrice?`<span style="color:var(--ink2)">@$${i.price}=$${(Number(i.qty)*Number(i.price)).toLocaleString()}</span>`:''}</div>`).join('')}</div>
-      <div class="po-actions">${st!=='done'?`<button class="btn btn-ghost btn-sm" onclick="openPromiseModal('${po.id}')">更新承諾日</button><button class="btn btn-success btn-sm" onclick="markDone('${po.id}')">確認出貨</button>`:bdg('已出貨','b-ok')}${st==='overdue'?`<button class="btn btn-primary btn-sm">🚨 追廠商</button>`:''}<button class="btn btn-ghost btn-sm" onclick="editPO('${po.id}')">編輯</button><button class="btn btn-xs" style="background:#fdecea;color:#b52a1a;border:none;padding:5px 10px;border-radius:7px" onclick="deletePO('${po.id}')">刪除</button></div></div>`;
+      <div class="po-actions">${st!=='done'?`<button class="btn btn-ghost btn-sm" onclick="openPromiseModal('${po.id}')">更新承諾日</button><button class="btn btn-success btn-sm" onclick="markDone('${po.id}')">確認出貨</button>`:`${bdg('已出貨','b-ok')}<button class="btn btn-ghost btn-sm" onclick="undoShipment('${po.id}')">撤銷出貨</button>`}${st==='overdue'?`<button class="btn btn-primary btn-sm">🚨 追廠商</button>`:''}<button class="btn btn-ghost btn-sm" onclick="editPO('${po.id}')">編輯</button><button class="btn btn-xs" style="background:#fdecea;color:#b52a1a;border:none;padding:5px 10px;border-radius:7px" onclick="deletePO('${po.id}')">刪除</button></div></div>`;
   }).join('');
 }
 
@@ -796,6 +796,7 @@ async function markDone(id) {
           paymentDate: '',
           paymentMethod: '',
           batchId,
+          poId: id,
           createdBy: currentUser.username
         };
         try { await api('addShipment', { row }); } catch(e) {}
@@ -1688,6 +1689,44 @@ async function saveEditShipment() {
 }
 
 // ══ DELETE & EDIT PO ══════════════════════════════════════════════════════════
+
+async function undoShipment(poId) {
+  if (!confirm('確定要撤銷出貨？會刪除對應的出貨記錄並將採購單改回待出貨。')) return;
+  const po = DB.pos.find(p => p.id === poId);
+  if (!po) return;
+
+  try {
+    // 1. Revert PO status
+    await api('updatePO', { id: poId, updates: { status: 'pending' } });
+
+    // 2. Find and delete matching shipments
+    // Match by vendorName + SKUs from PO items
+    let poItems = [];
+    try { poItems = typeof po.items === 'string' ? JSON.parse(po.items) : (po.items || []); } catch(e) {}
+    const poSkus = poItems.map(i => i.sku);
+
+    // Use poId for precise matching, fallback to vendorName+sku
+    const toDelete = DB.shipments.filter(s =>
+      s.poId === poId || (
+        !s.poId &&
+        s.vendorName === po.vendorName &&
+        poSkus.includes(s.sku)
+      )
+    );
+
+    let deleted = 0;
+    for (const s of toDelete) {
+      try {
+        await api('deleteRow', { sheetName: 'Shipments', id: s.id });
+        deleted++;
+      } catch(e) {}
+    }
+
+    toast(`✓ 已撤銷出貨，刪除 ${deleted} 筆出貨記錄`);
+    await loadAll();
+  } catch(e) { toast('操作失敗', true); }
+}
+
 async function deletePO(id) {
   if (!confirm('確定要刪除這筆採購單？')) return;
   try {
