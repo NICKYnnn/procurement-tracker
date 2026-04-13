@@ -728,6 +728,7 @@ async function savePromise(){
 
 function renderShipments(){
   const cfg=ROLE_CFG[currentUser.role];
+  console.log('Shipments:', DB.shipments.map(s=>({id:s.id,vendor:s.vendorName,terms:DB.vendors.find(v=>v.name===s.vendorName)?.terms})));
   const vf=document.getElementById('ship-vf').value;
   const rows=DB.shipments.filter(s=>!vf||s.vendorName===vf);
   document.getElementById('ship-tbody').innerHTML=rows.map(s=>{const amt=Number(s.price||0)*Number(s.received||s.shipped||0);const trackHtml=s.tracking?`<a href="https://www.google.com/search?q=${encodeURIComponent((s.logistics||'')+' '+s.tracking)}" target="_blank" style="font-family:var(--mono);font-size:11px;color:var(--info);text-decoration:none">${s.tracking}</a>`:'—';const paymentBadge = isNonMonthlyVendor(s.vendorName) ? (s.paymentStatus==='paid'?`<button class="badge b-ok" style="cursor:pointer;border:none" onclick="togglePayment('${s.id}','unpaid')">已付款</button>`:`<button class="badge b-danger" style="cursor:pointer;border:none" onclick="togglePayment('${s.id}','paid')">未付款</button>`) : '';
