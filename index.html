@@ -792,10 +792,19 @@ function renderShipments(){
   }
 
   // Render as cards instead of table rows
-  const container=document.getElementById('ship-tbody');
-  // Switch to card layout - replace table with div
-  const tableEl=container.closest('table');
-  const tableParent=tableEl.parentElement;
+  // Use a dedicated wrapper div for card layout
+  let container = document.getElementById('ship-cards-wrap');
+  if (!container) {
+    // First time: replace the table with a wrapper div
+    const tableEl = document.getElementById('ship-tbody')?.closest('table');
+    if (tableEl) {
+      container = document.createElement('div');
+      container.id = 'ship-cards-wrap';
+      tableEl.parentElement.replaceChild(container, tableEl);
+    }
+  }
+  if (!container) return;
+  const tableParent = container;
 
   let html='<div style="padding:0">';
   [...batches.entries()].sort((a,b)=>{
@@ -870,7 +879,6 @@ function renderShipments(){
   });
   html+='</div>';
 
-  // Replace table with card layout
   tableParent.innerHTML=html;
 }
 
