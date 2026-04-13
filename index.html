@@ -1767,7 +1767,7 @@ async function undoShipment(poId) {
 async function deletePO(id) {
   if (!confirm('確定要刪除這筆採購單？')) return;
   DB.pos = DB.pos.filter(p => p.id !== id);
-  renderPOs();
+  renderPO();
   toast('已刪除 ✓');
   api('deleteRow', { sheetName: 'PurchaseOrders', id }).catch(()=>{ toast('刪除失敗，請重新整理', true); loadAll(); });
 }
@@ -1860,7 +1860,7 @@ async function saveEditPO() {
   const poIdx = DB.pos.findIndex(p => p.id === id);
   if (poIdx >= 0) Object.assign(DB.pos[poIdx], updates);
   closeOv('edit-po-modal');
-  renderPOs();
+  renderPO();
   toast('採購單已更新 ✓');
   api('updatePO', { id, updates }).catch(()=>{ toast('儲存失敗，請重新整理', true); loadAll(); });
 }
