@@ -743,7 +743,7 @@ function openPoModal(){piCount=0;document.getElementById('pm-quicktext').value='
 function makePoRow(i){const cfg=ROLE_CFG[currentUser.role];return `<div class="form-grid ${cfg.showPrice?'g3':'g2'}" id="pi-${i}" style="margin-bottom:8px"><div class="form-row" style="margin:0"><label style="${i?'display:none':''}">款號</label><input type="text" id="pi-sku-${i}" placeholder="A2024-01"></div><div class="form-row" style="margin:0"><label style="${i?'display:none':''}">顏色</label><input type="text" id="pi-color-${i}" placeholder="紅色"></div>${cfg.showPrice?`<div class="form-row" style="margin:0"><label style="${i?'display:none':''}">單價</label><input type="number" id="pi-price-${i}" placeholder="0"></div>`:`<input type="hidden" id="pi-price-${i}" value="0">`}<div class="form-row" style="margin:0"><label style="${i?'display:none':''}">數量</label><input type="number" id="pi-qty-${i}" placeholder="0"></div>${i?`<div style="display:flex;align-items:flex-end;padding-bottom:2px"><button class="btn btn-ghost btn-xs" onclick="document.getElementById('pi-${i}').remove()">✕</button></div>`:'<div></div>'}</div>`;}
 function addPoItem(){const w=document.getElementById('po-items-wrap');const d=document.createElement('div');d.innerHTML=makePoRow(piCount++);w.appendChild(d.firstChild);}
 
-async async function savePO(){
+async function savePO(){
   const items=[];
   for(let i=0;i<piCount;i++){const sku=document.getElementById('pi-sku-'+i)?.value;if(!sku)continue;items.push({sku,color:document.getElementById('pi-color-'+i).value||'—',price:Number(document.getElementById('pi-price-'+i).value)||0,qty:Number(document.getElementById('pi-qty-'+i).value)||0});}
   if(!items.length){toast('請至少填一個品項',true);return;}
