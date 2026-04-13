@@ -1663,7 +1663,7 @@ async function createReplenishPO(batchKey) {
 }
 
 async function togglePaymentBatch(batchKey, newStatus) {
-  const items = DB.shipments.filter(s => (s.batchId||s.vendorName+'|'+s.date+'|'+(s.logistics||'')+'|'+(s.tracking||'')) === batchKey);
+  const items = DB.shipments.filter(s => (s.batchId||(s.vendorName+'|'+(s.date||'').slice(0,10)+'|'+(s.logistics||'')+'|'+(s.tracking||''))) === batchKey);
   for (const s of items) {
     try { await api('updateShipment', {id:s.id, updates:{paymentStatus:newStatus, paymentDate:newStatus==='paid'?todayStr():''}}); } catch(e){}
   }
@@ -1672,7 +1672,7 @@ async function togglePaymentBatch(batchKey, newStatus) {
 }
 
 async function deleteBatch(batchKey) {
-  const items = DB.shipments.filter(s => (s.batchId||s.vendorName+'|'+s.date+'|'+(s.logistics||'')+'|'+(s.tracking||'')) === batchKey);
+  const items = DB.shipments.filter(s => (s.batchId||(s.vendorName+'|'+(s.date||'').slice(0,10)+'|'+(s.logistics||'')+'|'+(s.tracking||''))) === batchKey);
   if (!confirm(`確定要刪除這張出貨單（共 ${items.length} 筆記錄）？`)) return;
   for (const s of items) {
     try { await api('deleteRow', {sheetName:'Shipments', id:s.id}); } catch(e){}
@@ -1683,7 +1683,7 @@ async function deleteBatch(batchKey) {
 
 function editBatchShipment(batchKey) {
   // Edit the first item in batch for shared fields
-  const items = DB.shipments.filter(s => (s.batchId||s.vendorName+'|'+s.date+'|'+(s.logistics||'')+'|'+(s.tracking||'')) === batchKey);
+  const items = DB.shipments.filter(s => (s.batchId||(s.vendorName+'|'+(s.date||'').slice(0,10)+'|'+(s.logistics||'')+'|'+(s.tracking||''))) === batchKey);
   if (items.length) editShipment(items[0].id);
 }
 
