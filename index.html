@@ -696,7 +696,7 @@ function renderDash(){
   updateBadge('nb-alert',overdue.length+dueSoon.length);
   updateBadge('nb-od',overdue.length);
   document.getElementById('dash-stats').innerHTML=
-    (cfg.showPrice?`<div class="stat-card"><div class="lbl">本月採購金額</div><div class="val">$${monthAmt.toLocaleString()}</div><div class="hint">${monthShips.length}筆</div></div><div class="stat-card"><div class="lbl">本月未付金額</div><div class="val" style="color:${monthUnpaid>0?'var(--accent)':'var(--success)'}">$${monthUnpaid.toLocaleString()}</div><div class="hint">${monthUnpaid>0?'待付款':'全數付清'}</div></div>`:'')+
+    (cfg.showPrice?`<div class="stat-card"><div class="lbl">本月採購金額</div><div class="val">$${monthAmt.toLocaleString()}</div><div class="hint">${monthShips.length}筆</div></div><div class="stat-card" style="${monthUnpaid>0?'cursor:pointer':''}" onclick="${monthUnpaid>0?'goUnpaid()':''}"><div class="lbl">本月未付金額</div><div class="val" style="color:${monthUnpaid>0?'var(--accent)':'var(--success)'}">$${monthUnpaid.toLocaleString()}</div><div class="hint">${monthUnpaid>0?'點擊查看 →':'全數付清'}</div></div>`:'')+
     `<div class="stat-card"><div class="lbl">採購單逾期</div><div class="val" style="color:var(--accent)">${overdue.length}</div><div class="hint">需立即追蹤</div></div>
      <div class="stat-card"><div class="lbl">即將到期</div><div class="val" style="color:var(--warn)">${dueSoon.length}</div><div class="hint">近期提醒</div></div>
      <div class="stat-card"><div class="lbl">數量短缺</div><div class="val" style="color:var(--warn)">${shortage.length}</div><div class="hint">需確認</div></div>`;
@@ -1668,6 +1668,16 @@ async function createReplenishPO(batchKey) {
     await loadAll();
     go('po');
   } catch(e) { toast('建立失敗', true); }
+}
+
+function goUnpaid() {
+  go('shipments');
+  // After navigating, filter to show unpaid vendors only
+  setTimeout(() => {
+    // Highlight unpaid items by scrolling to first unpaid batch
+    const cards = document.querySelectorAll('[style*="cursor:pointer"]');
+    if (cards.length) cards[0].scrollIntoView({behavior:'smooth'});
+  }, 500);
 }
 
 async function togglePaymentBatch(batchKey, newStatus) {
