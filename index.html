@@ -411,7 +411,13 @@ input,select,textarea{font-family:var(--font);color:var(--ink)}
       <button class="btn btn-primary btn-sm" style="margin-top:8px" onclick="parsePoText()">AI 解析</button>
       <div id="pm-parse-result" style="margin-top:8px;font-size:12px;color:var(--ink3)"></div>
     </div>
-    <div class="form-grid g2"><div class="form-row"><label>廠商（解析後自動填入，可修改）</label><select id="pm-vendor"></select></div><div class="form-row"><label>採購日期</label><input type="date" id="pm-date"></div></div>
+    <div class="form-grid g2"><div class="form-row"><label>廠商（解析後自動填入，可修改）</label>
+          <div style="display:flex;gap:6px">
+            <select id="pm-vendor" style="flex:1" onchange="checkNewVendor()"></select>
+            <input type="text" id="pm-vendor-new" placeholder="新廠商名稱" style="flex:1;display:none;padding:8px 10px;border:1.5px solid var(--warn);border-radius:8px;font-size:13px;font-family:var(--font)">
+          </div>
+          <div id="pm-vendor-new-hint" style="display:none;font-size:11.5px;color:var(--warn);margin-top:4px">找不到匹配廠商，儲存後將自動新增</div>
+        </div><div class="form-row"><label>採購日期</label><input type="date" id="pm-date"></div></div>
     <div class="form-row"><label>備註</label><input type="text" id="pm-note" placeholder="選填"></div>
     <div style="font-size:12px;font-weight:600;color:var(--ink2);margin:10px 0 8px">採購品項（解析後自動填入，可手動調整）</div>
     <div id="po-items-wrap"></div>
@@ -737,11 +743,14 @@ function openPoModal(){piCount=0;document.getElementById('pm-quicktext').value='
 function makePoRow(i){const cfg=ROLE_CFG[currentUser.role];return `<div class="form-grid ${cfg.showPrice?'g3':'g2'}" id="pi-${i}" style="margin-bottom:8px"><div class="form-row" style="margin:0"><label style="${i?'display:none':''}">款號</label><input type="text" id="pi-sku-${i}" placeholder="A2024-01"></div><div class="form-row" style="margin:0"><label style="${i?'display:none':''}">顏色</label><input type="text" id="pi-color-${i}" placeholder="紅色"></div>${cfg.showPrice?`<div class="form-row" style="margin:0"><label style="${i?'display:none':''}">單價</label><input type="number" id="pi-price-${i}" placeholder="0"></div>`:`<input type="hidden" id="pi-price-${i}" value="0">`}<div class="form-row" style="margin:0"><label style="${i?'display:none':''}">數量</label><input type="number" id="pi-qty-${i}" placeholder="0"></div>${i?`<div style="display:flex;align-items:flex-end;padding-bottom:2px"><button class="btn btn-ghost btn-xs" onclick="document.getElementById('pi-${i}').remove()">✕</button></div>`:'<div></div>'}</div>`;}
 function addPoItem(){const w=document.getElementById('po-items-wrap');const d=document.createElement('div');d.innerHTML=makePoRow(piCount++);w.appendChild(d.firstChild);}
 
-async function savePO(){
+async async function savePO(){
   const items=[];
   for(let i=0;i<piCount;i++){const sku=document.getElementById('pi-sku-'+i)?.value;if(!sku)continue;items.push({sku,color:document.getElementById('pi-color-'+i).value||'—',price:Number(document.getElementById('pi-price-'+i).value)||0,qty:Number(document.getElementById('pi-qty-'+i).value)||0});}
   if(!items.length){toast('請至少填一個品項',true);return;}
-  const row={vendorName:document.getElementById('pm-vendor').value,date:document.getElementById('pm-date').value,promiseDate:document.getElementById('pm-promise').value,remindDays:document.getElementById('pm-remind').value,note:document.getElementById('pm-note').value,status:'pending',items:JSON.stringify(items),createdBy:currentUser.username};
+  const vendor=getPoVendorName();if(!vendor){toast('請填入廠商名稱',true);return;}
+  // Auto-add new vendor if not in list
+  if(!DB.vendors.find(v=>v.name===vendor)){try{await api('addVendor',{row:{name:vendor,contact:'',phone:'',terms:'現付',note:'',active:'TRUE'}});toast(`已自動新增廠商「${vendor}」`);}catch(e){}}
+  const row={vendorName:vendor,date:document.getElementById('pm-date').value,promiseDate:document.getElementById('pm-promise').value,remindDays:document.getElementById('pm-remind').value,note:document.getElementById('pm-note').value,status:'pending',items:JSON.stringify(items),createdBy:currentUser.username};
   try{await api('addPO',{row});toast('採購單已儲存至雲端 ✓');closeOv('po-modal');await loadAll();}catch(e){}
 }
 async function markDone(id){try{await api('updatePO',{id,updates:{status:'done'}});toast('已標記完成 ✓');await loadAll();}catch(e){}}
@@ -1095,7 +1104,9 @@ async function importResult(json){
 function updateVendorSelects(){
   const opts=DB.vendors.map(v=>`<option>${v.name}</option>`).join('');
   const fallback=opts||'<option>請先新增廠商</option>';
-  ['pm-vendor','sm-vendor','im-vendor'].forEach(id=>{const el=document.getElementById(id);if(el)el.innerHTML=fallback;});
+  ['sm-vendor','im-vendor'].forEach(id=>{const el=document.getElementById(id);if(el)el.innerHTML=fallback;});
+  const pmV=document.getElementById('pm-vendor');
+  if(pmV)pmV.innerHTML=fallback+'<option value="__new__">＋ 新增廠商...</option>';
   const vf=document.getElementById('ship-vf');
   if(vf){const cur=vf.value;vf.innerHTML='<option value="">所有廠商</option>'+DB.vendors.map(v=>`<option value="${v.name}"${v.name===cur?' selected':''}>${v.name}</option>`).join('');}
 }
@@ -1226,9 +1237,19 @@ function parsePoText() {
 
   // Fill vendor
   const vendorSel = document.getElementById('pm-vendor');
+  const newInput = document.getElementById('pm-vendor-new');
+  const hint = document.getElementById('pm-vendor-new-hint');
   if (parsed.vendor) {
+    let found = false;
     for (let opt of vendorSel.options) {
-      if (opt.value === parsed.vendor) { opt.selected = true; break; }
+      if (opt.value === parsed.vendor) { opt.selected = true; found = true; break; }
+    }
+    if (!found) {
+      // Vendor not found - show new vendor input
+      vendorSel.value = '__new__';
+      newInput.style.display = 'block';
+      newInput.value = parsed.vendor;
+      hint.style.display = 'block';
     }
   }
   // Fill date
@@ -1398,6 +1419,30 @@ function isNonMonthlyVendor(vendorName) {
   const terms = String(v.terms || '').trim();
   console.log('isNonMonthly check:', vendorName, terms, !terms.includes('月結'));
   return terms.length > 0 && !terms.includes('月結');
+}
+
+
+// ── New vendor handling ───────────────────────────────────────────────────────
+function checkNewVendor() {
+  const sel = document.getElementById('pm-vendor');
+  const newInput = document.getElementById('pm-vendor-new');
+  const hint = document.getElementById('pm-vendor-new-hint');
+  if (sel.value === '__new__') {
+    newInput.style.display = 'block';
+    hint.style.display = 'block';
+    newInput.focus();
+  } else {
+    newInput.style.display = 'none';
+    hint.style.display = 'none';
+  }
+}
+
+function getPoVendorName() {
+  const sel = document.getElementById('pm-vendor');
+  if (sel.value === '__new__') {
+    return document.getElementById('pm-vendor-new').value.trim();
+  }
+  return sel.value;
 }
 
 function checkPaymentField() {
