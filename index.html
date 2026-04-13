@@ -684,11 +684,14 @@ function renderDash(){
   const overdue=DB.pos.filter(p=>poSt(p)==='overdue');
   const dueSoon=DB.pos.filter(p=>{const d=diffD(p.promiseDate);return d!==null&&d>=0&&d<=Number(p.remindDays||2)&&p.status!=='done';});
   const shortage=DB.shipments.filter(s=>s.status==='數量短缺');
-  const monthAmt=DB.shipments.reduce((a,s)=>a+Number(s.price||0)*Number(s.received||s.shipped||0),0);
+  const thisMonth=new Date().toISOString().slice(0,7);
+  const monthShips=DB.shipments.filter(s=>(s.date||'').slice(0,7)===thisMonth);
+  const monthAmt=monthShips.reduce((a,s)=>a+Number(s.price||0)*Number(s.shipped||0),0);
+  const monthUnpaid=monthShips.filter(s=>isNonMonthlyVendor(s.vendorName)&&s.paymentStatus!=='paid').reduce((a,s)=>a+Number(s.price||0)*Number(s.shipped||0),0);
   updateBadge('nb-alert',overdue.length+dueSoon.length);
   updateBadge('nb-od',overdue.length);
   document.getElementById('dash-stats').innerHTML=
-    (cfg.showPrice?`<div class="stat-card"><div class="lbl">本月應付帳款</div><div class="val" style="color:var(--accent)">$${monthAmt.toLocaleString()}</div><div class="hint">${DB.shipments.length}筆</div></div>`:'')+
+    (cfg.showPrice?`<div class="stat-card"><div class="lbl">本月採購金額</div><div class="val">$${monthAmt.toLocaleString()}</div><div class="hint">${monthShips.length}筆</div></div><div class="stat-card"><div class="lbl">本月未付金額</div><div class="val" style="color:${monthUnpaid>0?'var(--accent)':'var(--success)'}">$${monthUnpaid.toLocaleString()}</div><div class="hint">${monthUnpaid>0?'待付款':'全數付清'}</div></div>`:'')+
     `<div class="stat-card"><div class="lbl">採購單逾期</div><div class="val" style="color:var(--accent)">${overdue.length}</div><div class="hint">需立即追蹤</div></div>
      <div class="stat-card"><div class="lbl">即將到期</div><div class="val" style="color:var(--warn)">${dueSoon.length}</div><div class="hint">近期提醒</div></div>
      <div class="stat-card"><div class="lbl">數量短缺</div><div class="val" style="color:var(--warn)">${shortage.length}</div><div class="hint">需確認</div></div>`;
