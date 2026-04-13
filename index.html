@@ -299,7 +299,21 @@ input,select,textarea{font-family:var(--font);color:var(--ink)}
         </div>
         <div id="upload-result"></div>
       </div>
-      <div class="section"><div class="sec-hd"><h2>手動新增出貨記錄</h2><button class="btn btn-primary btn-sm" onclick="openShipModal()">＋ 新增</button></div><div style="padding:16px;color:var(--ink3);font-size:12.5px;text-align:center">或手動輸入單據資料</div></div>
+      <div class="section">
+        <div class="sec-hd"><h2>手動新增出貨記錄</h2></div>
+        <div style="padding:16px">
+          <div style="background:var(--info-lt);border:1px solid #a0c8f0;border-radius:9px;padding:12px 14px;margin-bottom:12px;font-size:12.5px;color:var(--info);line-height:1.65">
+            格式：廠商 日期 #款號 $單價 顏色數量<br>
+            例：新秀 4/13 #8728 $28 黑50白50咖啡35
+          </div>
+          <textarea id="ship-quicktext" placeholder="" style="width:100%;padding:9px 11px;border:1px solid var(--border);border-radius:7px;font-size:13px;min-height:70px;resize:vertical;outline:none;font-family:var(--font);margin-bottom:10px"></textarea>
+          <div style="display:flex;gap:8px">
+            <button class="btn btn-primary" onclick="parseShipText()">解析並新增</button>
+            <button class="btn btn-ghost" onclick="openShipModal()">手動填表</button>
+          </div>
+          <div id="ship-parse-result" style="margin-top:10px"></div>
+        </div>
+      </div>
       <div class="section">
         <div class="sec-hd"><h2>到貨確認（文字輸入）</h2></div>
         <div style="padding:16px">
@@ -433,7 +447,7 @@ input,select,textarea{font-family:var(--font);color:var(--ink)}
   <div class="modal">
     <h3>新增出貨記錄</h3>
     <div class="form-grid g2"><div class="form-row"><label>廠商</label><select id="sm-vendor" onchange="checkPaymentField()"></select></div><div class="form-row"><label>日期</label><input type="date" id="sm-date"></div></div>
-    <div class="form-grid g3"><div class="form-row"><label>款號</label><input type="text" id="sm-sku" placeholder="A2024-01"></div><div class="form-row"><label>顏色</label><input type="text" id="sm-color" placeholder="紅色"></div><div class="form-row" id="sm-price-row"><label>單價</label><input type="number" id="sm-price" placeholder="0"></div></div>
+    <div class="form-grid g3"><div class="form-row"><label>款號</label><input type="text" id="sm-sku" placeholder="A2024-01"></div><div class="form-row"><label>顏色</label><input type="text" id="sm-color" placeholder="紅色"></div><div class="form-row" id="sm-price-row" style="display:none"><label>單價</label><input type="number" id="sm-price" value="0"></div></div>
     <div class="form-grid g2"><div class="form-row"><label>發貨數量</label><input type="number" id="sm-shipped" placeholder="0"></div><div class="form-row"><label>到貨數量</label><input type="number" id="sm-received" placeholder="留空=尚未到貨"></div></div>
     <div class="form-grid g2"><div class="form-row"><label>狀態</label><select id="sm-status"><option>待出貨</option><option selected>已出貨</option><option>已到貨</option><option>數量短缺</option></select></div><div class="form-row"><label>備註</label><input type="text" id="sm-note" placeholder="選填"></div></div>
     <div class="form-row" id="sm-payment-row" style="display:none">
@@ -1018,6 +1032,108 @@ async function testGemini(){
   }catch(e){statusEl.innerHTML=`<span style="color:var(--accent)">錯誤：${e.message}</span>`;}
 }
 
+
+// ── Parse shipment quick text ─────────────────────────────────────────────────
+async function parseShipText() {
+  const text = document.getElementById('ship-quicktext').value.trim();
+  const resultEl = document.getElementById('ship-parse-result');
+  if (!text) { toast('請輸入出貨內容', true); return; }
+
+  const parsed = parsePoQuickText(text); // reuse same parser
+  if (!parsed.items.length) {
+    resultEl.innerHTML = '<span style="color:var(--accent)">無法解析，請確認格式正確</span>';
+    return;
+  }
+
+  const vendor = parsed.vendor || '';
+  if (!vendor) {
+    resultEl.innerHTML = '<span style="color:var(--accent)">請在文字中包含廠商名稱</span>';
+    return;
+  }
+
+  // Show preview
+  let html = `<div style="background:var(--surface2);border-radius:8px;padding:12px 14px;margin-bottom:10px">
+    <div style="font-size:12.5px;font-weight:600;margin-bottom:8px">解析結果：廠商「${vendor}」${parsed.date?'，'+parsed.date:''}</div>`;
+  parsed.items.forEach(i => {
+    // Show price from PO if available
+    let displayPrice = i.price;
+    if (!displayPrice) {
+      const po = DB.pos.find(p => {
+        let its = [];
+        try { its = typeof p.items === 'string' ? JSON.parse(p.items) : (p.items || []); } catch(e) {}
+        return p.vendorName === vendor && its.some(it => it.sku === i.sku && it.color === i.color);
+      });
+      if (po) {
+        const poItems = typeof po.items === 'string' ? JSON.parse(po.items) : (po.items || []);
+        displayPrice = poItems.find(it => it.sku === i.sku && it.color === i.color)?.price || 0;
+      }
+    }
+    html += `<div style="font-size:12.5px;padding:4px 0;border-bottom:1px solid var(--border)">${i.sku} ${cdot(i.color)}${i.color} 發貨${i.qty}件${displayPrice?'，$'+displayPrice+'（採購單）':''}</div>`;
+  });
+  html += `<div style="margin-top:10px;display:flex;gap:8px">
+    <button class="btn btn-primary btn-sm" onclick="confirmShipText()">確認新增至雲端</button>
+    <button class="btn btn-ghost btn-sm" onclick="document.getElementById('ship-parse-result').innerHTML=''">取消</button>
+  </div></div>`;
+  resultEl.innerHTML = html;
+  resultEl._parsed = parsed;
+}
+
+async function confirmShipText() {
+  const resultEl = document.getElementById('ship-parse-result');
+  const parsed = resultEl._parsed;
+  if (!parsed) return;
+
+  const batchId = 'B-' + Date.now();
+  const vendor = parsed.vendor;
+
+  // Auto-add vendor if not exists
+  if (!DB.vendors.find(v => v.name === vendor)) {
+    try {
+      await api('addVendor', { row: { name: vendor, contact: '', phone: '', terms: '現付', note: '', active: 'TRUE' } });
+      toast(`已自動新增廠商「${vendor}」`);
+    } catch(e) {}
+  }
+
+  for (const item of parsed.items) {
+    // Look up price from matching PO
+    let price = item.price || 0;
+    if (!price) {
+      const po = DB.pos.find(p => {
+        let items = [];
+        try { items = typeof p.items === 'string' ? JSON.parse(p.items) : (p.items || []); } catch(e) {}
+        return p.vendorName === vendor && items.some(i => i.sku === item.sku && i.color === item.color);
+      });
+      if (po) {
+        const poItems = typeof po.items === 'string' ? JSON.parse(po.items) : (po.items || []);
+        price = poItems.find(i => i.sku === item.sku && i.color === item.color)?.price || 0;
+      }
+    }
+    const row = {
+      date: parsed.date || todayStr(),
+      vendorName: vendor,
+      sku: item.sku,
+      color: item.color,
+      price,
+      shipped: item.qty,
+      received: '',
+      status: '已出貨',
+      note: '',
+      paymentStatus: '',
+      paymentDate: '',
+      paymentMethod: '',
+      batchId,
+      createdBy: currentUser.username
+    };
+    try { await api('addShipment', { row }); } catch(e) {}
+  }
+
+  toast(`✓ 已新增 ${parsed.items.length} 筆出貨記錄`);
+  document.getElementById('ship-quicktext').value = '';
+  resultEl.innerHTML = '';
+  await loadAll();
+  go('shipments');
+}
+
 // ── Upload with Gemini ────────────────────────────────────────────────────────
 async function handleUpload(input){
   const file=input.files[0];if(!file)return;
@@ -1054,7 +1170,20 @@ async function importResult(json){
   const matchSummary=[];
 
   for(const i of(p.items||[])){
-    const row={date:p.date||todayStr(),vendorName:matchedVendor,sku:i.sku||'—',color:i.color||'—',price:i.price||0,shipped:i.quantity||0,received:'',status:'已出貨',note:p.notes||'',paymentStatus:'',paymentDate:'',batchId:importBatchId,createdBy:currentUser.username};
+    // Look up price from PO if not in receipt
+    let importPrice = Number(i.price) || 0;
+    if (!importPrice) {
+      const po = DB.pos.find(p2 => {
+        let its = [];
+        try { its = typeof p2.items === 'string' ? JSON.parse(p2.items) : (p2.items || []); } catch(e) {}
+        return p2.vendorName === matchedVendor && its.some(it => it.sku === i.sku && it.color === i.color);
+      });
+      if (po) {
+        const poItems = typeof po.items === 'string' ? JSON.parse(po.items) : (po.items || []);
+        importPrice = poItems.find(it => it.sku === i.sku && it.color === i.color)?.price || 0;
+      }
+    }
+    const row={date:p.date||todayStr(),vendorName:matchedVendor,sku:i.sku||'—',color:i.color||'—',price:importPrice,shipped:i.quantity||0,received:'',status:'已出貨',note:p.notes||'',paymentStatus:'',paymentDate:'',batchId:importBatchId,createdBy:currentUser.username};
     await api('addShipment',{row});
 
     // Match to PO
