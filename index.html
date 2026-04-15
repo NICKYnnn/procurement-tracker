@@ -615,8 +615,11 @@ async function loadAll(){
   try{
     const[posRes,shipsRes,vendorsRes,invRes]=await Promise.all([api('getPOs'),api('getShipments'),api('getVendors'),api('getInventory')]);
     DB.pos=posRes.rows||[];DB.shipments=shipsRes.rows||[];DB.vendors=vendorsRes.rows||[];DB.inventory=invRes.rows||[];
-    setSyncState('ok');updateVendorSelects();renderCurrentPage();loadGeminiKey();
-  }catch(e){setSyncState('err');}
+    setSyncState('ok');
+    updateVendorSelects();
+    try{renderCurrentPage();}catch(re){console.error('render error:',re);}
+    loadGeminiKey();
+  }catch(e){setSyncState('err');console.error('loadAll error:',e);}
 }
 
 function renderCurrentPage(){
