@@ -840,7 +840,7 @@ async function markDone(id) {
     await loadAll();
   } catch(e) { toast('操作失敗', true); }
 }
-function openPromiseModal(id){document.getElementById('prom-id').value=id;document.getElementById('prom-date').value='';document.getElementById('prom-note').value='';document.getElementById('promise-modal').classList.add('open');}
+function openPromiseModal(id){document.getElementById('prom-id').value=id;document.getElementById('prom-date').value=todayStr();document.getElementById('prom-note').value='';document.getElementById('promise-modal').classList.add('open');}
 async function savePromise(){
   const id=document.getElementById('prom-id').value;
   try{await api('updatePO',{id,updates:{promiseDate:document.getElementById('prom-date').value,remindDays:document.getElementById('prom-days').value,note:document.getElementById('prom-note').value,status:'pending'}});toast('承諾日已更新 ✓');closeOv('promise-modal');await loadAll();}catch(e){}
@@ -1715,7 +1715,7 @@ function editShipment(id) {
   const esmVSel = document.getElementById('esm-vendor');
   esmVSel.innerHTML = DB.vendors.map(v=>`<option value="${v.name}">${v.name}</option>`).join('');
   document.getElementById('esm-id').value = id;
-  document.getElementById('esm-date').value = s.date || '';
+  document.getElementById('esm-date').value = (s.date||'').slice(0,10) || todayStr();
   document.getElementById('esm-sku').value = s.sku || '';
   document.getElementById('esm-color').value = s.color || '';
   document.getElementById('esm-price').value = s.price || 0;
@@ -1826,7 +1826,7 @@ function editPO(id) {
   const epoVSel = document.getElementById('epo-vendor');
   epoVSel.innerHTML = DB.vendors.map(v=>`<option value="${v.name}">${v.name}</option>`).join('');
   document.getElementById('epo-id').value = id;
-  document.getElementById('epo-date').value = (po.date||'').slice(0,10);
+  document.getElementById('epo-date').value = (po.date||'').slice(0,10) || todayStr();
   document.getElementById('epo-note').value = po.note || '';
   document.getElementById('epo-promise').value = po.promiseDate || '';
   // Set vendor
