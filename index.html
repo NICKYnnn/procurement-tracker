@@ -275,7 +275,7 @@ input,select,textarea{font-family:var(--font);color:var(--ink)}
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <select id="po-date-filter" onchange="renderPO()" style="padding:6px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px;background:var(--surface);color:var(--ink)"><option value="">所有時間</option><option value="today">今天</option><option value="week">本週</option><option value="month">本月</option><option value="3month">近3個月</option></select>
         <select id="po-filter" onchange="renderPO()" style="padding:6px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px;background:var(--surface);color:var(--ink)">
-          <option value="">全部</option><option value="pending">待出貨</option><option value="overdue">已逾期</option><option value="partial">部分到貨</option><option value="done">完成</option>
+          <option value="">全部</option><option value="unshipped">未出貨</option><option value="done">已出貨</option><option value="pending">待出貨</option><option value="overdue">已逾期</option><option value="partial">部分到貨</option>
         </select>
         <button class="btn btn-primary btn-sm" onclick="openPoModal()">＋ 建立</button>
       </div>
@@ -740,7 +740,13 @@ function renderPO(){
   const cfg=ROLE_CFG[currentUser.role];
   const f=document.getElementById('po-filter').value;
   const dateRange=getDateFilterRange('po-date-filter');
-  const filtered=DB.pos.filter(p=>(!f||poSt(p)===f)&&inDateRange(p.date,dateRange));
+  const filtered=DB.pos.filter(p=>{
+    if(!inDateRange(p.date,dateRange)) return false;
+    if(!f) return true;
+    if(f==='unshipped') return poSt(p)!=='done';
+    if(f==='done') return poSt(p)==='done';
+    return poSt(p)===f;
+  });
   if(!filtered.length){document.getElementById('po-list').innerHTML='<div style="padding:30px;text-align:center;color:var(--ink3)">暫無採購單</div>';return;}
   document.getElementById('po-list').innerHTML=filtered.map(po=>{
     const d=diffD(po.promiseDate),st=poSt(po);
