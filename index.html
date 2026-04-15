@@ -544,6 +544,10 @@ input,select,textarea{font-family:var(--font);color:var(--ink)}
 <div class="toast" id="toast"></div>
 
 <script>
+window.onerror = function(msg, src, line, col, err) {
+  document.body.innerHTML = '<div style="padding:20px;font-size:14px;color:red"><b>JS Error:</b><br>' + msg + '<br>Line: ' + line + '<br>' + (err ? err.stack : '') + '</div>';
+  return false;
+};
 const API='https://script.google.com/macros/s/AKfycbwGTlADyjOOWbk7xcHtLCAl8zh2npYMyyT_GGufxf6IerBzjW7B-D0Wds1cYao3FoPoVw/exec';
 const CMAP={'紅色':'#e05555','藍色':'#5577e0','黑色':'#333','白色':'#ccc','粉色':'#e0a0b0','綠色':'#55a06a','黃色':'#e0c455','灰色':'#999','橘色':'#e08455','紫色':'#9a77e0','米色':'#d4c49a','咖啡':'#8a6040'};
 let currentUser=null;
@@ -1271,6 +1275,12 @@ async function createReplenishPO(batchKey) {
     await loadAll();
     go('po');
   } catch(e) { toast('建立失敗', true); }
+}
+
+function isNonMonthlyVendor(vendorName) {
+  const v = DB.vendors.find(x => x.name === vendorName);
+  if (!v) return true;
+  return v.terms !== '月結30天';
 }
 
 function goUnpaid() {
