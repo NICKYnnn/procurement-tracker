@@ -712,7 +712,7 @@ function updateBadge(id,n){const el=document.getElementById(id);if(el){el.textCo
 function updateVendorSelects(){
   const opts=DB.vendors.map(v=>`<option>${v.name}</option>`).join('');
   const fallback=opts||'<option>請先新增廠商</option>';
-  ['sm-vendor','im-vendor'].forEach(id=>{const el=document.getElementById(id);if(el)el.innerHTML=fallback;});
+  ['sm-vendor','im-vendor','esm-vendor'].forEach(id=>{const el=document.getElementById(id);if(el)el.innerHTML=fallback;});
   const pmV=document.getElementById('pm-vendor');
   if(pmV)pmV.innerHTML=fallback+'<option value="__new__">＋ 新增廠商...</option>';
   const vf=document.getElementById('ship-vf');
@@ -1705,6 +1705,13 @@ function editShipment(id) {
   if (document.getElementById('esm-payment')) document.getElementById('esm-payment').value = s.paymentStatus || '';
   if (document.getElementById('esm-payment-method')) document.getElementById('esm-payment-method').value = s.paymentMethod || '';
   document.getElementById('edit-ship-modal').classList.add('open');
+  // Re-set vendor after DOM renders
+  const _vid = id;
+  setTimeout(()=>{
+    const _s = DB.shipments.find(x=>x.id===_vid);
+    const sel = document.getElementById('esm-vendor');
+    if(sel && _s) sel.value = _s.vendorName||'';
+  }, 50);
 }
 
 function editBatchShipment(batchKey) {
