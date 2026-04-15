@@ -1686,9 +1686,9 @@ async function deleteBatch(batchKey) {
 function editShipment(id) {
   const s = DB.shipments.find(x => x.id === id);
   if (!s) return;
+  updateVendorSelects();
   document.getElementById('esm-id').value = id;
   document.getElementById('esm-date').value = (s.date||'').slice(0,10) || todayStr();
-  updateVendorSelects();
   document.getElementById('esm-vendor').value = s.vendorName || '';
   document.getElementById('esm-sku').value = s.sku || '';
   document.getElementById('esm-color').value = s.color || '';
@@ -1699,6 +1699,9 @@ function editShipment(id) {
   document.getElementById('esm-note').value = s.note || '';
   document.getElementById('esm-logistics').value = s.logistics || '';
   document.getElementById('esm-tracking').value = s.tracking || '';
+  // Show/hide payment fields based on vendor
+  const payRow = document.getElementById('esm-payment-row');
+  if (payRow) payRow.style.display = isNonMonthlyVendor(s.vendorName) ? '' : 'none';
   if (document.getElementById('esm-payment')) document.getElementById('esm-payment').value = s.paymentStatus || '';
   if (document.getElementById('esm-payment-method')) document.getElementById('esm-payment-method').value = s.paymentMethod || '';
   document.getElementById('edit-ship-modal').classList.add('open');
