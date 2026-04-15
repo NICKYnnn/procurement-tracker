@@ -793,6 +793,138 @@ function btnRestore(el) {
   el.style.opacity = '';
 }
 
+
+function openShipModal(){
+  updateVendorSelects();
+  document.getElementById('sm-date').value=todayStr();
+  document.getElementById('sm-logistics').value='';
+  document.getElementById('sm-tracking').value='';
+  document.getElementById('sm-payment').value='';
+  document.getElementById('sm-payment-date').value='';
+  if(document.getElementById('sm-payment-method')) document.getElementById('sm-payment-method').value='';
+  document.getElementById('ship-modal').classList.add('open');
+  setTimeout(checkPaymentField,100);
+}
+
+function fuzzyMatchVendor(name) {
+  if(!name) return '';
+  const v = DB.vendors.find(x => x.name === name);
+  if(v) return v.name;
+  const lower = name.toLowerCase();
+  const match = DB.vendors.find(x =>
+    x.name.toLowerCase().includes(lower) ||
+    lower.includes(x.name.toLowerCase())
+  );
+  return match ? match.name : name;
+}
+
+async function importResult(json) {
+  const p = JSON.parse(json);
+  const matchedVendor = fuzzyMatchVendor(p.vendor||'')||p.vendor||'未知';
+  const importBatchId = 'B-' + Date.now();
+  const matchSummary = [];
+  for(const i of (p.items||[])) {
+    let importPrice = Number(i.price) || 0;
+    if(!importPrice) {
+      const po = DB.pos.find(p2 => {
+        let its = [];
+        try { its = typeof p2.items==='string'?JSON.parse(p2.items):(p2.items||[]); } catch(e) {}
+        return p2.vendorName===matchedVendor && its.some(it=>it.sku===i.sku&&colorMatch(it.color,i.color));
+      });
+      if(po) {
+        const poItems = typeof po.items==='string'?JSON.parse(po.items):(po.items||[]);
+        importPrice = poItems.find(it=>it.sku===i.sku&&colorMatch(it.color,i.color))?.price||0;
+      }
+    }
+    const row={date:p.date||todayStr(),vendorName:matchedVendor,sku:i.sku||'—',color:i.color||'—',price:importPrice,shipped:i.quantity||i.qty||0,received:'',status:'已出貨',note:p.notes||'',paymentStatus:'',paymentDate:'',paymentMethod:'',batchId:importBatchId,createdBy:currentUser.username};
+    try{ await api('addShipment',{row}); matchSummary.push(i.sku); }catch(e){}
+  }
+  toast(`✓ 已匯入 ${matchSummary.length} 筆 (${matchedVendor})`);
+  await loadAll();
+}
+
+function saveEditVendor() {
+  const id = document.getElementById('evm-id').value;
+  const updates = {
+    name: document.getElementById('evm-name').value,
+    contact: document.getElementById('evm-contact').value,
+    phone: document.getElementById('evm-phone').value,
+    terms: document.getElementById('evm-terms').value,
+    note: document.getElementById('evm-note').value,
+    active: document.getElementById('evm-active').value,
+  };
+  if(!updates.name){toast('廠商名稱不能為空',true);return;}
+  api('updateRow',{sheetName:'Vendors',id,updates})
+    .then(()=>{toast('廠商資料已更新 ✓');closeOv('edit-vendor-modal');loadAll();})
+    .catch(()=>toast('儲存失敗',true));
+}
+
+function checkNewVendor() {
+  const sel = document.getElementById('pm-vendor');
+  const newInput = document.getElementById('pm-vendor-new');
+  const hint = document.getElementById('pm-vendor-new-hint');
+  if(!sel||!newInput||!hint) return;
+  if(sel.value==='__new__'){newInput.style.display='block';hint.style.display='block';newInput.focus();}
+  else{newInput.style.display='none';hint.style.display='none';}
+}
+
+function getPoVendorName() {
+  const sel = document.getElementById('pm-vendor');
+  if(sel&&sel.value==='__new__') return document.getElementById('pm-vendor-new')?.value.trim()||'';
+  return sel?.value||'';
+}
+
+
+function closeOv(id){document.getElementById(id)?.classList.remove('open');}
+
+function parsePoText(){
+  const text=document.getElementById('pm-quicktext').value.trim();
+  const resultEl=document.getElementById('pm-parse-result');
+  if(!text){resultEl.textContent='';return;}
+  const parsed=parsePoQuickText(text);
+  if(!parsed.items.length){resultEl.textContent='無法解析，請確認格式';resultEl.style.color='var(--accent)';return;}
+  // Fill vendor
+  const vendorSel=document.getElementById('pm-vendor');
+  const newInput=document.getElementById('pm-vendor-new');
+  const hint=document.getElementById('pm-vendor-new-hint');
+  if(parsed.vendor){
+    let found=false;
+    for(let opt of vendorSel.options){if(opt.value===parsed.vendor){opt.selected=true;found=true;break;}}
+    if(!found){vendorSel.value='__new__';newInput.style.display='block';newInput.value=parsed.vendor;if(hint)hint.style.display='block';}
+  }
+  // Fill date
+  if(parsed.date)document.getElementById('pm-date').value=parsed.date;
+  // Fill items
+  const wrap=document.getElementById('po-items-wrap');
+  wrap.innerHTML='';piCount=0;
+  parsed.items.forEach(item=>{
+    const div=document.createElement('div');div.innerHTML=makePoRow(piCount);wrap.appendChild(div.firstChild);
+    document.getElementById('pi-sku-'+piCount).value=item.sku||'';
+    document.getElementById('pi-color-'+piCount).value=item.color||'';
+    document.getElementById('pi-price-'+piCount).value=item.price||0;
+    document.getElementById('pi-qty-'+piCount).value=item.qty||0;
+    piCount++;
+  });
+  resultEl.style.color='var(--success)';
+  resultEl.textContent='✓ 解析成功：廠商「'+(parsed.vendor||'未識別')+'」，'+parsed.items.length+'個品項，請確認後儲存';
+}
+
+function editVendor(id) {
+  const v = DB.vendors.find(x => x.id === id);
+  if (!v) return;
+  document.getElementById('evm-id').value = id;
+  document.getElementById('evm-name').value = v.name || '';
+  document.getElementById('evm-contact').value = v.contact || '';
+  document.getElementById('evm-phone').value = v.phone || '';
+  document.getElementById('evm-note').value = v.note || '';
+  const termsSel = document.getElementById('evm-terms');
+  for (let opt of termsSel.options) { if (opt.value === v.terms) { opt.selected = true; break; } }
+  const activeSel = document.getElementById('evm-active');
+  const isActive = String(v.active).toUpperCase() === 'TRUE' || v.active === true;
+  for (let opt of activeSel.options) { if (opt.value === (isActive ? 'TRUE' : 'FALSE')) { opt.selected = true; break; } }
+  document.getElementById('edit-vendor-modal').classList.add('open');
+}
+
 function renderDash(){
   const cfg=ROLE_CFG[currentUser.role];
   const overdue=DB.pos.filter(p=>poSt(p)==='overdue');
