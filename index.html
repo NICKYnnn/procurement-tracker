@@ -708,6 +708,49 @@ function toast(msg,err=false){
 }
 function updateBadge(id,n){const el=document.getElementById(id);if(el){el.textContent=n;el.style.display=n?'':'none';}}
 
+
+function updateVendorSelects(){
+  const opts=DB.vendors.map(v=>`<option>${v.name}</option>`).join('');
+  const fallback=opts||'<option>請先新增廠商</option>';
+  ['sm-vendor','im-vendor'].forEach(id=>{const el=document.getElementById(id);if(el)el.innerHTML=fallback;});
+  const pmV=document.getElementById('pm-vendor');
+  if(pmV)pmV.innerHTML=fallback+'<option value="__new__">＋ 新增廠商...</option>';
+  const vf=document.getElementById('ship-vf');
+  if(vf){const cur=vf.value;vf.innerHTML='<option value="">所有廠商</option>'+DB.vendors.map(v=>`<option value="${v.name}"${v.name===cur?' selected':''}>${v.name}</option>`).join('');vf.value=cur||'';}
+}
+
+function checkPaymentField(){
+  const vendor=document.getElementById('sm-vendor')?.value;
+  const payRow=document.getElementById('sm-payment-row');
+  if(payRow)payRow.style.display=isNonMonthlyVendor(vendor)?'':'none';
+}
+
+function parsePoQuickText(text){
+  const result={vendor:'',date:'',items:[]};
+  if(!text.trim())return result;
+  const parts=text.trim().split(/\s+/);
+  let currentSku='',currentPrice=0;
+  parts.forEach(p=>{
+    if(p.startsWith('#')){currentSku=p.slice(1);}
+    else if(p.startsWith('$')){currentPrice=Number(p.slice(1))||0;}
+    else if(/^\d{1,2}\/\d{1,2}$/.test(p)){
+      const [m,d]=p.split('/');
+      const year=new Date().getFullYear();
+      result.date=`${year}-${m.padStart(2,'0')}-${d.padStart(2,'0')}`;
+    }
+    else if(currentSku&&/^[一-鿿\w]+\d+$/.test(p)){
+      const m=p.match(/^([一-鿿\w]+?)(\d+)$/);
+      if(m)result.items.push({sku:currentSku,color:m[1],qty:Number(m[2]),price:currentPrice});
+    }
+    else if(!result.vendor&&!/^\d/.test(p)&&!p.startsWith('#')&&!p.startsWith('$')){
+      // Fuzzy match vendor
+      const match=DB.vendors.find(v=>v.name===p||p.includes(v.name)||v.name.includes(p));
+      result.vendor=match?match.name:p;
+    }
+  });
+  return result;
+}
+
 function renderDash(){
   const cfg=ROLE_CFG[currentUser.role];
   const overdue=DB.pos.filter(p=>poSt(p)==='overdue');
