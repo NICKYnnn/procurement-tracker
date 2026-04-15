@@ -1204,7 +1204,7 @@ async function confirmShipText() {
       paymentDate: '',
       paymentMethod: '',
       batchId,
-      poId: matchPO?.id || '',
+      poId: (matchPO ? matchPO.id : '') || '',
       createdBy: currentUser.username
     };
     try { await api('addShipment', { row }); } catch(e) {}
