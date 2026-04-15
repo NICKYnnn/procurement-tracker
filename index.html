@@ -751,6 +751,48 @@ function parsePoQuickText(text){
   return result;
 }
 
+
+// ── Date filter helper ────────────────────────────────────────────────────────
+function getDateFilterRange(filterId) {
+  const val = document.getElementById(filterId)?.value || '';
+  if (!val) return null;
+  const now = new Date(); now.setHours(23,59,59,999);
+  const start = new Date();
+  if (val === 'today') { start.setHours(0,0,0,0); }
+  else if (val === 'week') { start.setDate(start.getDate() - start.getDay()); start.setHours(0,0,0,0); }
+  else if (val === 'month') { start.setDate(1); start.setHours(0,0,0,0); }
+  else if (val === '3month') { start.setMonth(start.getMonth()-3); start.setHours(0,0,0,0); }
+  return { start, end: now };
+}
+
+function inDateRange(dateStr, range) {
+  if (!range) return true;
+  if (!dateStr) return true;
+  const d = new Date(dateStr);
+  if (isNaN(d)) return true;
+  return d >= range.start && d <= range.end;
+}
+
+// ── Color normalize ───────────────────────────────────────────────────────────
+function normColor(c) { return (c||'').replace(/色$/,'').trim(); }
+function colorMatch(a, b) { return normColor(a) === normColor(b); }
+
+// ── Button loading helper ─────────────────────────────────────────────────────
+function btnLoad(el, text='處理中...') {
+  if (!el) return;
+  el._origText = el.textContent;
+  el._origDisabled = el.disabled;
+  el.disabled = true;
+  el.textContent = text;
+  el.style.opacity = '0.6';
+}
+function btnRestore(el) {
+  if (!el) return;
+  el.disabled = el._origDisabled || false;
+  el.textContent = el._origText || el.textContent;
+  el.style.opacity = '';
+}
+
 function renderDash(){
   const cfg=ROLE_CFG[currentUser.role];
   const overdue=DB.pos.filter(p=>poSt(p)==='overdue');
@@ -1327,6 +1369,149 @@ function isNonMonthlyVendor(vendorName) {
   const v = DB.vendors.find(x => x.name === vendorName);
   if (!v) return true;
   return v.terms !== '月結30天';
+}
+
+
+// ══ DELETE & EDIT SHIPMENT ════════════════════════════════════════════════════
+async function deleteShipment(id) {
+  if (!confirm('確定要刪除這筆出貨記錄？')) return;
+  DB.shipments = DB.shipments.filter(s => s.id !== id);
+  renderShipments();
+  toast('已刪除 ✓');
+  api('deleteRow', { sheetName: 'Shipments', id }).catch(()=>{ toast('刪除失敗，請重新整理', true); loadAll(); });
+}
+
+async function deleteBatch(batchKey) {
+  const items = DB.shipments.filter(s => (s.batchId||(s.vendorName+'|'+(s.date||'').slice(0,10)+'|'+(s.logistics||'')+'|'+(s.tracking||''))) === batchKey);
+  if (!confirm(`確定要刪除這張出貨單（共 ${items.length} 筆記錄）？`)) return;
+  const ids = items.map(s => s.id);
+  DB.shipments = DB.shipments.filter(s => !ids.includes(s.id));
+  renderShipments();
+  toast('已刪除 ✓');
+  for (const s of items) {
+    api('deleteRow', {sheetName:'Shipments', id:s.id}).catch(()=>{});
+  }
+}
+
+async function saveEditShipment() {
+  const id = document.getElementById('esm-id').value;
+  const updates = {
+    date: document.getElementById('esm-date').value,
+    vendorName: document.getElementById('esm-vendor').value,
+    sku: document.getElementById('esm-sku').value,
+    color: document.getElementById('esm-color').value,
+    price: document.getElementById('esm-price').value || 0,
+    shipped: document.getElementById('esm-shipped').value || 0,
+    received: document.getElementById('esm-received').value || '',
+    status: document.getElementById('esm-status').value,
+    note: document.getElementById('esm-note').value,
+    logistics: document.getElementById('esm-logistics').value,
+    tracking: document.getElementById('esm-tracking').value,
+    paymentStatus: document.getElementById('esm-payment')?.value || '',
+    paymentMethod: document.getElementById('esm-payment-method')?.value || '',
+  };
+  const shipIdx = DB.shipments.findIndex(s => s.id === id);
+  if (shipIdx >= 0) Object.assign(DB.shipments[shipIdx], updates);
+  closeOv('edit-ship-modal');
+  renderShipments();
+  toast('已更新 ✓');
+  api('updateShipment', { id, updates }).catch(()=>{ toast('儲存失敗，請重新整理', true); loadAll(); });
+}
+
+// ══ DELETE & EDIT PO ══════════════════════════════════════════════════════════
+async function deletePO(id) {
+  if (!confirm('確定要刪除這筆採購單？')) return;
+  DB.pos = DB.pos.filter(p => p.id !== id);
+  renderPO();
+  toast('已刪除 ✓');
+  api('deleteRow', { sheetName: 'PurchaseOrders', id }).catch(()=>{ toast('刪除失敗，請重新整理', true); loadAll(); });
+}
+
+async function undoShipment(poId) {
+  if (!confirm('確定要撤銷出貨？會刪除對應的出貨記錄並將採購單改回待出貨。')) return;
+  const po = DB.pos.find(p => p.id === poId);
+  if (!po) return;
+  document.querySelectorAll(`[onclick="undoShipment('${poId}')"]`).forEach(btn => {
+    btn.disabled = true; btn.textContent = '處理中...'; btn.style.opacity = '0.6';
+  });
+  let poItems = [];
+  try { poItems = typeof po.items === 'string' ? JSON.parse(po.items) : (po.items || []); } catch(e) {}
+  const poSkus = poItems.map(i => i.sku);
+  try {
+    await api('updatePO', { id: poId, updates: { status: 'pending' } });
+    const toDelete = DB.shipments.filter(s =>
+      s.poId === poId || (!s.poId && s.vendorName === po.vendorName && poSkus.includes(s.sku))
+    );
+    let deleted = 0;
+    for (const s of toDelete) {
+      try { await api('deleteRow', { sheetName: 'Shipments', id: s.id }); deleted++; } catch(e) {}
+    }
+    toast(`✓ 已撤銷出貨，刪除 ${deleted} 筆出貨記錄`);
+    await loadAll();
+  } catch(e) { toast('操作失敗', true); }
+}
+
+let epoItemCount = 0;
+function editPO(id) {
+  const po = DB.pos.find(x => x.id === id);
+  if (!po) return;
+  document.getElementById('epo-id').value = id;
+  document.getElementById('epo-vendor').value = po.vendorName || '';
+  document.getElementById('epo-date').value = (po.date||'').slice(0,10) || todayStr();
+  document.getElementById('epo-promise').value = (po.promiseDate||'').slice(0,10) || todayStr();
+  document.getElementById('epo-remind').value = po.remindDays || 2;
+  document.getElementById('epo-note').value = po.note || '';
+  let items = [];
+  try { items = typeof po.items === 'string' ? JSON.parse(po.items) : (po.items || []); } catch(e) {}
+  epoItemCount = 0;
+  const wrap = document.getElementById('epo-items-wrap');
+  wrap.innerHTML = '';
+  items.forEach(item => {
+    const div = document.createElement('div');
+    div.innerHTML = makeEpoRow(epoItemCount, item);
+    wrap.appendChild(div.firstChild);
+    epoItemCount++;
+  });
+  if (!epoItemCount) { const div = document.createElement('div'); div.innerHTML = makeEpoRow(epoItemCount++, {}); wrap.appendChild(div.firstChild); }
+  document.getElementById('edit-po-modal').classList.add('open');
+}
+
+function makeEpoRow(i, item={}) {
+  const cfg = ROLE_CFG[currentUser.role];
+  return `<div style="display:flex;gap:6px;align-items:flex-end;margin-bottom:8px" id="epi-${i}">
+    <div style="flex:2"><label style="display:block;font-size:11px;color:var(--ink2);margin-bottom:3px${i?';visibility:hidden':''}">款號</label><input type="text" id="epi-sku-${i}" value="${item.sku||''}" style="width:100%;padding:7px 9px;border:1px solid var(--border);border-radius:7px;font-size:13px"></div>
+    <div style="flex:2"><label style="display:block;font-size:11px;color:var(--ink2);margin-bottom:3px${i?';visibility:hidden':''}">顏色</label><input type="text" id="epi-color-${i}" value="${item.color||''}" style="width:100%;padding:7px 9px;border:1px solid var(--border);border-radius:7px;font-size:13px"></div>
+    ${cfg.showPrice?`<div style="flex:1.5"><label style="display:block;font-size:11px;color:var(--ink2);margin-bottom:3px${i?';visibility:hidden':''}">單價</label><input type="number" id="epi-price-${i}" value="${item.price||0}" style="width:100%;padding:7px 9px;border:1px solid var(--border);border-radius:7px;font-size:13px"></div>`:`<input type="hidden" id="epi-price-${i}" value="${item.price||0}">`}
+    <div style="flex:1.5"><label style="display:block;font-size:11px;color:var(--ink2);margin-bottom:3px${i?';visibility:hidden':''}">數量</label><input type="number" id="epi-qty-${i}" value="${item.qty||0}" style="width:100%;padding:7px 9px;border:1px solid var(--border);border-radius:7px;font-size:13px"></div>
+    <div style="padding-bottom:2px">${i?`<button class="btn btn-ghost btn-xs" onclick="document.getElementById('epi-${i}').remove()">✕</button>`:'<span style="display:inline-block;width:28px"></span>'}</div>
+  </div>`;
+}
+function addEpoItem(){const w=document.getElementById('epo-items-wrap');const d=document.createElement('div');d.innerHTML=makeEpoRow(epoItemCount++,{});w.appendChild(d.firstChild);}
+
+async function saveEditPO() {
+  const id = document.getElementById('epo-id').value;
+  const items = [];
+  for (let i = 0; i < epoItemCount; i++) {
+    const skuEl = document.getElementById('epi-sku-' + i);
+    if (!skuEl) continue;
+    const sku = skuEl.value;
+    if (!sku) continue;
+    items.push({ sku, color: document.getElementById('epi-color-' + i)?.value || '—', price: Number(document.getElementById('epi-price-' + i)?.value) || 0, qty: Number(document.getElementById('epi-qty-' + i)?.value) || 0 });
+  }
+  const updates = {
+    vendorName: document.getElementById('epo-vendor').value,
+    date: document.getElementById('epo-date').value,
+    note: document.getElementById('epo-note').value,
+    promiseDate: document.getElementById('epo-promise').value,
+    remindDays: document.getElementById('epo-remind').value,
+    items: JSON.stringify(items),
+  };
+  const poIdx = DB.pos.findIndex(p => p.id === id);
+  if (poIdx >= 0) Object.assign(DB.pos[poIdx], updates);
+  closeOv('edit-po-modal');
+  renderPO();
+  toast('採購單已更新 ✓');
+  api('updatePO', { id, updates }).catch(()=>{ toast('儲存失敗，請重新整理', true); loadAll(); });
 }
 
 function goUnpaid() {
