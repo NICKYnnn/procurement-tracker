@@ -511,20 +511,21 @@ input,select,textarea{font-family:var(--font);color:var(--ink)}
 
 <!-- Edit Shipment Modal -->
 <div class="overlay" id="edit-ship-modal">
-  <div class="modal">
+  <div class="modal" style="max-width:640px">
     <h3>編輯出貨記錄</h3>
-    <input type="hidden" id="esm-id">
+    <input type="hidden" id="esm-batch-key">
+    <!-- 共用欄位：廠商/日期/物流/付款 -->
     <div class="form-grid g2"><div class="form-row"><label>廠商</label><select id="esm-vendor"></select></div><div class="form-row"><label>日期</label><input type="date" id="esm-date"></div></div>
-    <div class="form-grid g3"><div class="form-row"><label>款號</label><input type="text" id="esm-sku"></div><div class="form-row"><label>顏色</label><input type="text" id="esm-color"></div><div class="form-row" id="esm-price-row"><label>單價</label><input type="number" id="esm-price"></div></div>
-    <div class="form-grid g2"><div class="form-row"><label>發貨數量</label><input type="number" id="esm-shipped"></div><div class="form-row"><label>到貨數量</label><input type="number" id="esm-received" placeholder="留空=尚未到貨"></div></div>
-    <div class="form-grid g2"><div class="form-row"><label>狀態</label><select id="esm-status"><option>待出貨</option><option>已出貨</option><option>已到貨</option><option>數量短缺</option></select></div><div class="form-row"><label>物流方式</label><select id="esm-logistics"><option value="">未指定</option><option>海運</option><option>空運</option><option>海快</option><option>其他</option></select></div></div>
-    <div class="form-grid g2"><div class="form-row"><label>物流單號</label><input type="text" id="esm-tracking"></div><div class="form-row"><label>備註</label><input type="text" id="esm-note"></div></div>
+    <div class="form-grid g2"><div class="form-row"><label>物流方式</label><select id="esm-logistics"><option value="">未指定</option><option>海運</option><option>空運</option><option>海快</option><option>其他</option></select></div><div class="form-row"><label>物流單號</label><input type="text" id="esm-tracking"></div></div>
     <div class="form-row" id="esm-payment-row" style="display:none">
       <label>付款狀態</label>
       <select id="esm-payment" style="margin-bottom:8px"><option value="">未設定</option><option value="unpaid">未付款</option><option value="paid">已付款</option></select>
       <label>付款方式</label>
       <select id="esm-payment-method"><option value="">未設定</option><option>支付寶/微信</option><option>匯款</option></select>
     </div>
+    <!-- 每筆品項 -->
+    <div style="font-size:12px;font-weight:600;color:var(--ink2);margin:12px 0 8px">品項明細</div>
+    <div id="esm-items-wrap"></div>
     <div class="modal-footer"><button class="btn btn-ghost" onclick="closeOv('edit-ship-modal')">取消</button><button class="btn btn-primary" onclick="saveEditShipment()">儲存</button></div>
   </div>
 </div>
@@ -1546,28 +1547,40 @@ async function deleteBatch(batchKey) {
 }
 
 async function saveEditShipment() {
-  const id = document.getElementById('esm-id').value;
-  const updates = {
+  const sharedUpdates = {
     date: document.getElementById('esm-date').value,
     vendorName: document.getElementById('esm-vendor').value,
-    sku: document.getElementById('esm-sku').value,
-    color: document.getElementById('esm-color').value,
-    price: document.getElementById('esm-price').value || 0,
-    shipped: document.getElementById('esm-shipped').value || 0,
-    received: document.getElementById('esm-received').value || '',
-    status: document.getElementById('esm-status').value,
-    note: document.getElementById('esm-note').value,
     logistics: document.getElementById('esm-logistics').value,
     tracking: document.getElementById('esm-tracking').value,
     paymentStatus: document.getElementById('esm-payment')?.value || '',
     paymentMethod: document.getElementById('esm-payment-method')?.value || '',
   };
-  const shipIdx = DB.shipments.findIndex(s => s.id === id);
-  if (shipIdx >= 0) Object.assign(DB.shipments[shipIdx], updates);
+
+  const rows = document.querySelectorAll('#esm-items-wrap [data-esm-id]');
+  const saves = [];
+  rows.forEach(row => {
+    const id = row.getAttribute('data-esm-id');
+    const cfg = ROLE_CFG[currentUser.role];
+    const updates = {
+      ...sharedUpdates,
+      sku: row.querySelector('.esm-sku').value,
+      color: row.querySelector('.esm-color').value,
+      price: cfg.showPrice ? (row.querySelector('.esm-price').value || 0) : undefined,
+      shipped: row.querySelector('.esm-shipped').value || 0,
+      received: row.querySelector('.esm-received').value || '',
+      status: row.querySelector('.esm-status').value,
+      note: row.querySelector('.esm-note').value,
+    };
+    if (!cfg.showPrice) delete updates.price;
+    const idx = DB.shipments.findIndex(s => s.id === id);
+    if (idx >= 0) Object.assign(DB.shipments[idx], updates);
+    saves.push(api('updateShipment', { id, updates }).catch(()=>{}));
+  });
+
   closeOv('edit-ship-modal');
   renderShipments();
-  toast('已更新 ✓');
-  api('updateShipment', { id, updates }).catch(()=>{ toast('儲存失敗，請重新整理', true); loadAll(); });
+  toast(`已更新 ${rows.length} 筆 ✓`);
+  await Promise.all(saves);
 }
 
 // ══ DELETE & EDIT PO ══════════════════════════════════════════════════════════
@@ -1704,40 +1717,53 @@ async function deleteBatch(batchKey) {
 
 
 function editShipment(id) {
+  // Single item edit: wrap as a batch of one
   const s = DB.shipments.find(x => x.id === id);
   if (!s) return;
-  updateVendorSelects();
-  document.getElementById('esm-id').value = id;
-  document.getElementById('esm-date').value = (s.date||'').slice(0,10) || todayStr();
-  document.getElementById('esm-vendor').value = s.vendorName || '';
-  document.getElementById('esm-sku').value = s.sku || '';
-  document.getElementById('esm-color').value = s.color || '';
-  document.getElementById('esm-price').value = s.price || 0;
-  document.getElementById('esm-shipped').value = s.shipped || 0;
-  document.getElementById('esm-received').value = s.received || '';
-  document.getElementById('esm-status').value = s.status || '已出貨';
-  document.getElementById('esm-note').value = s.note || '';
-  document.getElementById('esm-logistics').value = s.logistics || '';
-  document.getElementById('esm-tracking').value = s.tracking || '';
-  // Show/hide payment fields based on vendor
-  const payRow = document.getElementById('esm-payment-row');
-  if (payRow) payRow.style.display = isNonMonthlyVendor(s.vendorName) ? '' : 'none';
-  if (document.getElementById('esm-payment')) document.getElementById('esm-payment').value = s.paymentStatus || '';
-  if (document.getElementById('esm-payment-method')) document.getElementById('esm-payment-method').value = s.paymentMethod || '';
-  document.getElementById('edit-ship-modal').classList.add('open');
-  // Re-set vendor after DOM renders
-  const _vid = id;
-  setTimeout(()=>{
-    const _s = DB.shipments.find(x=>x.id===_vid);
-    const sel = document.getElementById('esm-vendor');
-    if(sel && _s) sel.value = _s.vendorName||'';
-  }, 50);
+  const batchKey = s.batchId||(s.vendorName+'|'+(s.date||'').slice(0,10)+'|'+(s.logistics||'')+'|'+(s.tracking||''));
+  editBatchShipment(batchKey);
 }
 
 function editBatchShipment(batchKey) {
-  // Edit the first item in batch for shared fields
   const items = DB.shipments.filter(s => (s.batchId||(s.vendorName+'|'+(s.date||'').slice(0,10)+'|'+(s.logistics||'')+'|'+(s.tracking||''))) === batchKey);
-  if (items.length) editShipment(items[0].id);
+  if (!items.length) return;
+  const first = items[0];
+  const cfg = ROLE_CFG[currentUser.role];
+  updateVendorSelects();
+
+  document.getElementById('esm-batch-key').value = batchKey;
+  document.getElementById('esm-date').value = (first.date||'').slice(0,10) || todayStr();
+  document.getElementById('esm-logistics').value = first.logistics || '';
+  document.getElementById('esm-tracking').value = first.tracking || '';
+
+  // Payment row
+  const payRow = document.getElementById('esm-payment-row');
+  if (payRow) payRow.style.display = isNonMonthlyVendor(first.vendorName) ? '' : 'none';
+  if (document.getElementById('esm-payment')) document.getElementById('esm-payment').value = first.paymentStatus || '';
+  if (document.getElementById('esm-payment-method')) document.getElementById('esm-payment-method').value = first.paymentMethod || '';
+
+  // Render each item row
+  const wrap = document.getElementById('esm-items-wrap');
+  wrap.innerHTML = items.map((s, idx) => `
+    <div style="background:var(--surface2);border:1px solid var(--border);border-radius:8px;padding:10px 12px;margin-bottom:8px" data-esm-id="${s.id}">
+      <div style="display:grid;grid-template-columns:${cfg.showPrice?'1fr 1fr 1fr':'1fr 1fr'};gap:8px;margin-bottom:8px">
+        <div class="form-row" style="margin:0"><label style="font-size:11px">款號</label><input type="text" class="esm-sku" value="${s.sku||''}" style="width:100%;padding:6px 9px;border:1px solid var(--border);border-radius:7px;font-size:13px;font-family:var(--font)"></div>
+        <div class="form-row" style="margin:0"><label style="font-size:11px">顏色</label><input type="text" class="esm-color" value="${s.color||''}" style="width:100%;padding:6px 9px;border:1px solid var(--border);border-radius:7px;font-size:13px;font-family:var(--font)"></div>
+        ${cfg.showPrice?`<div class="form-row" style="margin:0"><label style="font-size:11px">單價</label><input type="number" class="esm-price" value="${s.price||0}" style="width:100%;padding:6px 9px;border:1px solid var(--border);border-radius:7px;font-size:13px;font-family:var(--font)"></div>`:''}
+      </div>
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr 1.5fr;gap:8px">
+        <div class="form-row" style="margin:0"><label style="font-size:11px">發貨</label><input type="number" class="esm-shipped" value="${s.shipped||0}" style="width:100%;padding:6px 9px;border:1px solid var(--border);border-radius:7px;font-size:13px;font-family:var(--font)"></div>
+        <div class="form-row" style="margin:0"><label style="font-size:11px">到貨</label><input type="number" class="esm-received" value="${s.received||''}" placeholder="留空" style="width:100%;padding:6px 9px;border:1px solid var(--border);border-radius:7px;font-size:13px;font-family:var(--font)"></div>
+        <div class="form-row" style="margin:0"><label style="font-size:11px">狀態</label><select class="esm-status" style="width:100%;padding:6px 9px;border:1px solid var(--border);border-radius:7px;font-size:12px;font-family:var(--font)"><option${s.status==='待出貨'?' selected':''}>待出貨</option><option${s.status==='已出貨'?' selected':''}>已出貨</option><option${s.status==='已到貨'?' selected':''}>已到貨</option><option${s.status==='數量短缺'?' selected':''}>數量短缺</option></select></div>
+        <div class="form-row" style="margin:0"><label style="font-size:11px">備註</label><input type="text" class="esm-note" value="${s.note||''}" style="width:100%;padding:6px 9px;border:1px solid var(--border);border-radius:7px;font-size:13px;font-family:var(--font)"></div>
+      </div>
+    </div>`).join('');
+
+  document.getElementById('edit-ship-modal').classList.add('open');
+  setTimeout(()=>{
+    const sel = document.getElementById('esm-vendor');
+    if(sel) sel.value = first.vendorName||'';
+  }, 50);
 }
 
 async function togglePayment(id, newStatus) {
