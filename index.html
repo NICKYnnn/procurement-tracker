@@ -277,6 +277,7 @@ input,select,textarea{font-family:var(--font);color:var(--ink)}
         <select id="po-filter" onchange="renderPO()" style="padding:6px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px;background:var(--surface);color:var(--ink)">
           <option value="">全部</option><option value="unshipped">未出貨</option><option value="done">已出貨</option><option value="pending">待出貨</option><option value="overdue">已逾期</option><option value="partial">部分到貨</option>
         </select>
+        <button id="po-sort-btn" class="btn btn-ghost btn-sm" onclick="togglePoSort()" style="display:flex;align-items:center;gap:4px">↓ 最新</button>
         <button class="btn btn-primary btn-sm" onclick="openPoModal()">＋ 建立</button>
       </div>
     </div>
@@ -337,6 +338,7 @@ input,select,textarea{font-family:var(--font);color:var(--ink)}
       <div style="display:flex;gap:8px;align-items:center;flex-wrap:wrap">
         <select id="ship-date-filter" onchange="renderShipments()" style="padding:6px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px;background:var(--surface);color:var(--ink)"><option value="">所有時間</option><option value="today">今天</option><option value="week">本週</option><option value="month">本月</option><option value="3month">近3個月</option></select>
         <select id="ship-vf" onchange="renderShipments()" style="padding:6px 10px;border:1px solid var(--border);border-radius:7px;font-size:12px;background:var(--surface);color:var(--ink)"><option value="">所有廠商</option></select>
+        <button id="ship-sort-btn" class="btn btn-ghost btn-sm" onclick="toggleShipSort()" style="display:flex;align-items:center;gap:4px">↓ 最新</button>
         <button class="btn btn-primary btn-sm" onclick="openShipModal()">＋ 新增</button>
       </div>
     </div>
@@ -960,6 +962,23 @@ function renderDash(){
   document.getElementById('dash-table').innerHTML=DB.shipments.slice(0,5).map(s=>{const rate=s.received?(Number(s.received)/Number(s.shipped)*100):null;return `<tr><td>${s.vendorName}</td><td class="mono">${s.sku}</td><td>${cdot(s.color)}${s.color}</td><td class="mono">${s.shipped}</td><td class="mono">${s.received||'—'}</td><td style="min-width:120px">${rate!=null?progBar(rate):'—'}</td><td>${shipBdg(s.status)}</td></tr>`;}).join('')||'<tr><td colspan="7" style="padding:20px;text-align:center;color:var(--ink3)">暫無記錄</td></tr>';
 }
 
+let poSortDesc = true;    // true = 新→舊, false = 舊→新
+let shipSortDesc = true;  // true = 新→舊, false = 舊→新
+
+function togglePoSort(){
+  poSortDesc = !poSortDesc;
+  const btn = document.getElementById('po-sort-btn');
+  if(btn) btn.innerHTML = poSortDesc ? '↓ 最新' : '↑ 最舊';
+  renderPO();
+}
+
+function toggleShipSort(){
+  shipSortDesc = !shipSortDesc;
+  const btn = document.getElementById('ship-sort-btn');
+  if(btn) btn.innerHTML = shipSortDesc ? '↓ 最新' : '↑ 最舊';
+  renderShipments();
+}
+
 function renderPO(){
   const cfg=ROLE_CFG[currentUser.role];
   const f=document.getElementById('po-filter').value;
@@ -972,6 +991,7 @@ function renderPO(){
     return poSt(p)===f;
   });
   if(!filtered.length){document.getElementById('po-list').innerHTML='<div style="padding:30px;text-align:center;color:var(--ink3)">暫無採購單</div>';return;}
+  filtered.sort((a,b)=>{const da=a.date||'',db=b.date||'';return poSortDesc?db.localeCompare(da):da.localeCompare(db);});
   document.getElementById('po-list').innerHTML=filtered.map(po=>{
     const d=diffD(po.promiseDate),st=poSt(po);
     let items=[];try{items=typeof po.items==='string'?JSON.parse(po.items):(po.items||[]);}catch(e){}
@@ -1139,7 +1159,7 @@ function renderShipments(){
   let html='<div style="padding:0">';
   [...batches.entries()].sort((a,b)=>{
     const da=a[1][0]?.date||''; const db=b[1][0]?.date||'';
-    return db.localeCompare(da);
+    return shipSortDesc?db.localeCompare(da):da.localeCompare(db);
   }).forEach(([key,items])=>{
     const first=items[0];
     const vendor=first.vendorName||'—';
