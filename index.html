@@ -715,7 +715,7 @@ function updateBadge(id,n){const el=document.getElementById(id);if(el){el.textCo
 function updateVendorSelects(){
   const opts=DB.vendors.map(v=>`<option>${v.name}</option>`).join('');
   const fallback=opts||'<option>請先新增廠商</option>';
-  ['sm-vendor','im-vendor','esm-vendor'].forEach(id=>{const el=document.getElementById(id);if(el)el.innerHTML=fallback;});
+  ['sm-vendor','im-vendor','esm-vendor','epo-vendor'].forEach(id=>{const el=document.getElementById(id);if(el)el.innerHTML=fallback;});
   const pmV=document.getElementById('pm-vendor');
   if(pmV)pmV.innerHTML=fallback+'<option value="__new__">＋ 新增廠商...</option>';
   const vf=document.getElementById('ship-vf');
