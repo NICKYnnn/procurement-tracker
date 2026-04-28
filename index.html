@@ -1504,16 +1504,22 @@ async function createReplenishPO(batchKey) {
 
   const shortages = [];
   batchItems.forEach(s => {
-    const po = DB.pos.find(p => {
-      let items = [];
-      try { items = typeof p.items === 'string' ? JSON.parse(p.items) : (p.items || []); } catch(e) {}
-      return p.vendorName === s.vendorName && items.some(i => i.sku === s.sku && i.color === s.color);
-    });
+    const po = s.poId
+      ? DB.pos.find(p => p.id === s.poId)
+      : DB.pos.find(p => {
+          let items = [];
+          try { items = typeof p.items === 'string' ? JSON.parse(p.items) : (p.items || []); } catch(e) {}
+          return p.vendorName === s.vendorName && items.some(i => i.sku === s.sku && colorMatch(i.color, s.color));
+        });
     if (!po) return;
-    const items = typeof po.items === 'string' ? JSON.parse(po.items) : (po.items || []);
-    const ordered = items.find(i => i.sku === s.sku && i.color === s.color)?.qty || 0;
-    const diff = Number(ordered) - Number(s.shipped);
-    if (diff > 0) {
+    const poItems = typeof po.items === 'string' ? JSON.parse(po.items) : (po.items || []);
+    const ordered = poItems.find(i => i.sku === s.sku && colorMatch(i.color, s.color))?.qty || 0;
+    // 累計所有批次的出貨量
+    const totalShipped = DB.shipments
+      .filter(x => x.vendorName === s.vendorName && x.sku === s.sku && colorMatch(x.color, s.color))
+      .reduce((a, x) => a + Number(x.shipped || 0), 0);
+    const diff = Number(ordered) - totalShipped;
+    if (diff > 0 && !shortages.find(x => x.sku === s.sku && colorMatch(x.color, s.color))) {
       shortages.push({ sku: s.sku, color: s.color, price: s.price || 0, qty: diff });
     }
   });
